@@ -1,0 +1,726 @@
+---
+title: 'Deletar Webhook'
+description: 'Como remover webhooks que não são mais necessários'
+---
+
+Esta página mostra como deletar webhooks que não são mais necessários, incluindo boas práticas para limpeza e manutenção.
+
+## Endpoint
+
+### DELETE `/api/v1/webhook/:id`
+
+Remove um webhook específico pelo seu ID.
+
+**URL Completa:**
+- **Produção**: `https://api.quantumpay.com.br/api/v1/webhook/:id`
+
+## Headers obrigatórios
+
+```http
+Authorization: Bearer <seu_token_bearer>
+```
+
+## Exemplo de requisição
+
+```bash
+curl -X DELETE 'https://api.quantumpay.com.br/api/v1/webhook/3' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+```
+
+## Resposta de sucesso (200)
+
+```json
+{
+  "success": true,
+  "message": "Webhook deletado com sucesso",
+  "data": {
+    "id": 3,
+    "deletedAt": "2024-01-20T16:30:00.000Z"
+  }
+}
+```
+
+## Implementações por linguagem
+
+### JavaScript/Node.js
+
+```javascript
+class WebhookManager {
+  constructor(auth) {
+    this.auth = auth
+  }
+
+  async deleteWebhook(webhookId) {
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(
+        'DELETE',
+        `/api/v1/webhook/${webhookId}`
+      )
+      
+      return response.data
+    } catch (error) {
+      throw new Error(`Erro ao deletar webhook: ${error.message}`)
+    }
+  }
+
+  async deleteWebhookSafely(webhookId) {
+    try {
+      // Verificar se webhook existe primeiro
+      const webhook = await this.getWebhook(webhookId)
+      
+      if (!webhook) {
+        throw new Error('Webhook não encontrado')
+      }
+
+      // Confirmar se realmente quer deletar
+      console.log(`Deletando webhook: ${webhook.name} (${webhook.url})`)
+      
+      const result = await this.deleteWebhook(webhookId)
+      
+      console.log('Webhook deletado com sucesso!')
+      return result
+      
+    } catch (error) {
+      console.error('Erro ao deletar webhook:', error.message)
+      throw error
+    }
+  }
+
+  async deleteInactiveWebhooks() {
+    try {
+      const webhooks = await this.listWebhooks()
+      const inactiveWebhooks = webhooks.filter(w => !w.isActive)
+      
+      console.log(`Encontrados ${inactiveWebhooks.length} webhooks inativos`)
+      
+      const results = []
+      for (const webhook of inactiveWebhooks) {
+        console.log(`Deletando webhook inativo: ${webhook.name}`)
+        const result = await this.deleteWebhook(webhook.id)
+        results.push(result)
+      }
+      
+      return results
+    } catch (error) {
+      throw new Error(`Erro ao deletar webhooks inativos: ${error.message}`)
+    }
+  }
+
+  async deleteWebhooksByPattern(namePattern) {
+    try {
+      const webhooks = await this.listWebhooks()
+      const matchingWebhooks = webhooks.filter(w => 
+        w.name.toLowerCase().includes(namePattern.toLowerCase())
+      )
+      
+      console.log(`Encontrados ${matchingWebhooks.length} webhooks com padrão "${namePattern}"`)
+      
+      const results = []
+      for (const webhook of matchingWebhooks) {
+        console.log(`Deletando webhook: ${webhook.name}`)
+        const result = await this.deleteWebhook(webhook.id)
+        results.push(result)
+      }
+      
+      return results
+    } catch (error) {
+      throw new Error(`Erro ao deletar webhooks por padrão: ${error.message}`)
+    }
+  }
+
+  async getWebhook(webhookId) {
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(
+        'GET',
+        `/api/v1/webhook/${webhookId}`
+      )
+      return response.data.data
+    } catch (error) {
+      if (error.status === 404) {
+        return null
+      }
+      throw error
+    }
+  }
+
+  async listWebhooks() {
+    const response = await this.auth.makeAuthenticatedRequest(
+      'GET',
+      '/api/v1/webhook'
+    )
+    return response.data.data
+  }
+}
+
+// Uso
+const webhookManager = new WebhookManager(authInstance)
+
+// Deletar webhook específico
+try {
+  await webhookManager.deleteWebhookSafely(3)
+  console.log('Webhook deletado!')
+} catch (error) {
+  console.error('Erro:', error.message)
+}
+
+// Limpeza de webhooks inativos
+try {
+  const results = await webhookManager.deleteInactiveWebhooks()
+  console.log(`${results.length} webhooks inativos removidos`)
+} catch (error) {
+  console.error('Erro na limpeza:', error.message)
+}
+```
+
+### Python
+
+```python
+class WebhookManager:
+    def __init__(self, auth_instance):
+        self.auth = auth_instance
+
+    def delete_webhook(self, webhook_id):
+        response = self.auth.make_authenticated_request(
+            'DELETE',
+            f'/api/v1/webhook/{webhook_id}'
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise Exception(f"Erro ao deletar webhook: {response.text}")
+
+    def delete_webhook_safely(self, webhook_id):
+        try:
+            # Verificar se webhook existe primeiro
+            webhook = self.get_webhook(webhook_id)
+            
+            if not webhook:
+                raise Exception('Webhook não encontrado')
+
+            # Confirmar se realmente quer deletar
+            print(f'Deletando webhook: {webhook["name"]} ({webhook["url"]})')
+            
+            result = self.delete_webhook(webhook_id)
+            
+            print('Webhook deletado com sucesso!')
+            return result
+            
+        except Exception as error:
+            print(f'Erro ao deletar webhook: {error}')
+            raise error
+
+    def delete_inactive_webhooks(self):
+        try:
+            webhooks = self.list_webhooks()
+            inactive_webhooks = [w for w in webhooks if not w['isActive']]
+            
+            print(f'Encontrados {len(inactive_webhooks)} webhooks inativos')
+            
+            results = []
+            for webhook in inactive_webhooks:
+                print(f'Deletando webhook inativo: {webhook["name"]}')
+                result = self.delete_webhook(webhook['id'])
+                results.append(result)
+            
+            return results
+        except Exception as error:
+            raise Exception(f'Erro ao deletar webhooks inativos: {error}')
+
+    def delete_webhooks_by_pattern(self, name_pattern):
+        try:
+            webhooks = self.list_webhooks()
+            matching_webhooks = [
+                w for w in webhooks 
+                if name_pattern.lower() in w['name'].lower()
+            ]
+            
+            print(f'Encontrados {len(matching_webhooks)} webhooks com padrão "{name_pattern}"')
+            
+            results = []
+            for webhook in matching_webhooks:
+                print(f'Deletando webhook: {webhook["name"]}')
+                result = self.delete_webhook(webhook['id'])
+                results.append(result)
+            
+            return results
+        except Exception as error:
+            raise Exception(f'Erro ao deletar webhooks por padrão: {error}')
+
+    def get_webhook(self, webhook_id):
+        try:
+            response = self.auth.make_authenticated_request(
+                'GET',
+                f'/api/v1/webhook/{webhook_id}'
+            )
+            return response.json()['data'] if response.status_code == 200 else None
+        except Exception:
+            return None
+
+    def list_webhooks(self):
+        response = self.auth.make_authenticated_request('GET', '/api/v1/webhook')
+        return response.json()['data']
+
+# Uso
+webhook_manager = WebhookManager(auth_instance)
+
+# Deletar webhook específico
+try:
+    webhook_manager.delete_webhook_safely(3)
+    print('Webhook deletado!')
+except Exception as error:
+    print(f'Erro: {error}')
+
+# Limpeza de webhooks inativos
+try:
+    results = webhook_manager.delete_inactive_webhooks()
+    print(f'{len(results)} webhooks inativos removidos')
+except Exception as error:
+    print(f'Erro na limpeza: {error}')
+```
+
+### PHP
+
+```php
+<?php
+
+class WebhookManager {
+    private $auth;
+
+    public function __construct($authInstance) {
+        $this->auth = $authInstance;
+    }
+
+    public function deleteWebhook($webhookId) {
+        $response = $this->auth->makeAuthenticatedRequest(
+            'DELETE',
+            "/api/v1/webhook/{$webhookId}"
+        );
+
+        $data = json_decode($response, true);
+
+        if ($data['success']) {
+            return $data;
+        } else {
+            throw new Exception("Erro ao deletar webhook: " . $response);
+        }
+    }
+
+    public function deleteWebhookSafely($webhookId) {
+        try {
+            // Verificar se webhook existe primeiro
+            $webhook = $this->getWebhook($webhookId);
+            
+            if (!$webhook) {
+                throw new Exception('Webhook não encontrado');
+            }
+
+            // Confirmar se realmente quer deletar
+            echo "Deletando webhook: {$webhook['name']} ({$webhook['url']})\n";
+            
+            $result = $this->deleteWebhook($webhookId);
+            
+            echo "Webhook deletado com sucesso!\n";
+            return $result;
+            
+        } catch (Exception $error) {
+            echo "Erro ao deletar webhook: " . $error->getMessage() . "\n";
+            throw $error;
+        }
+    }
+
+    public function deleteInactiveWebhooks() {
+        try {
+            $webhooks = $this->listWebhooks();
+            $inactiveWebhooks = array_filter($webhooks, function($w) {
+                return !$w['isActive'];
+            });
+            
+            echo "Encontrados " . count($inactiveWebhooks) . " webhooks inativos\n";
+            
+            $results = [];
+            foreach ($inactiveWebhooks as $webhook) {
+                echo "Deletando webhook inativo: {$webhook['name']}\n";
+                $result = $this->deleteWebhook($webhook['id']);
+                $results[] = $result;
+            }
+            
+            return $results;
+        } catch (Exception $error) {
+            throw new Exception("Erro ao deletar webhooks inativos: " . $error->getMessage());
+        }
+    }
+
+    public function deleteWebhooksByPattern($namePattern) {
+        try {
+            $webhooks = $this->listWebhooks();
+            $matchingWebhooks = array_filter($webhooks, function($w) use ($namePattern) {
+                return stripos($w['name'], $namePattern) !== false;
+            });
+            
+            echo "Encontrados " . count($matchingWebhooks) . " webhooks com padrão \"{$namePattern}\"\n";
+            
+            $results = [];
+            foreach ($matchingWebhooks as $webhook) {
+                echo "Deletando webhook: {$webhook['name']}\n";
+                $result = $this->deleteWebhook($webhook['id']);
+                $results[] = $result;
+            }
+            
+            return $results;
+        } catch (Exception $error) {
+            throw new Exception("Erro ao deletar webhooks por padrão: " . $error->getMessage());
+        }
+    }
+
+    public function getWebhook($webhookId) {
+        try {
+            $response = $this->auth->makeAuthenticatedRequest(
+                'GET',
+                "/api/v1/webhook/{$webhookId}"
+            );
+            $data = json_decode($response, true);
+            return $data['sucess'] ? $data['data'] : null;
+        } catch (Exception $error) {
+            return null;
+        }
+    }
+
+    public function listWebhooks() {
+        $response = $this->auth->makeAuthenticatedRequest('GET', '/api/v1/webhook');
+        $data = json_decode($response, true);
+        return $data['data'];
+    }
+}
+
+// Uso
+$webhookManager = new WebhookManager($authInstance);
+
+// Deletar webhook específico
+try {
+    $webhookManager->deleteWebhookSafely(3);
+    echo "Webhook deletado!\n";
+} catch (Exception $error) {
+    echo "Erro: " . $error->getMessage() . "\n";
+}
+
+// Limpeza de webhooks inativos
+try {
+    $results = $webhookManager->deleteInactiveWebhooks();
+    echo count($results) . " webhooks inativos removidos\n";
+} catch (Exception $error) {
+    echo "Erro na limpeza: " . $error->getMessage() . "\n";
+}
+?>
+```
+
+## Boas práticas
+
+### 1. Verificação Antes da Exclusão
+
+<AccordionGroup>
+  <Accordion title="Confirmar existência" icon="search">
+    Sempre verifique se o webhook existe antes de tentar deletar:
+    
+    ```javascript
+    async function safeDelete(webhookId) {
+      const webhook = await getWebhook(webhookId)
+      
+      if (!webhook) {
+        throw new Error('Webhook não encontrado')
+      }
+      
+      return await deleteWebhook(webhookId)
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Verificar uso recente" icon="chart-line">
+    Verifique se o webhook foi usado recentemente:
+    
+    ```javascript
+    function isRecentlyUsed(webhook, days = 30) {
+      if (!webhook.lastTriggered) return false
+      
+      const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+      return new Date(webhook.lastTriggered) > cutoff
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="⚠️ Alertar Sobre Consequências" icon="triangle-exclamation">
+    Avise sobre o impacto da exclusão:
+    
+    ```javascript
+    function validateDeletion(webhook) {
+      if (webhook.isActive) {
+        console.warn(`⚠️ Webhook ativo será removido: ${webhook.name}`)
+      }
+      
+      if (webhook.successRate > 95) {
+        console.warn(`⚠️ Webhook com alta taxa de sucesso: ${webhook.successRate}%`)
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 2. Limpeza Inteligente
+
+```javascript
+class WebhookCleaner {
+  constructor(webhookManager) {
+    this.webhookManager = webhookManager
+  }
+
+  async cleanupOldWebhooks(options = {}) {
+    const {
+      deleteInactive = true,
+      deleteOldUnused = true,
+      unusedDays = 90,
+      deleteTestWebhooks = false,
+      dryRun = false
+    } = options
+
+    const webhooks = await this.webhookManager.listWebhooks()
+    const toDelete = []
+
+    for (const webhook of webhooks) {
+      let shouldDelete = false
+      let reason = ''
+
+      // Webhooks inativos
+      if (deleteInactive && !webhook.isActive) {
+        shouldDelete = true
+        reason = 'Inativo'
+      }
+
+      // Webhooks antigos sem uso
+      if (deleteOldUnused && this.isOldAndUnused(webhook, unusedDays)) {
+        shouldDelete = true
+        reason = `Sem uso há ${unusedDays} dias`
+      }
+
+      // Webhooks de teste (opcional)
+      if (deleteTestWebhooks && this.isTestWebhook(webhook)) {
+        shouldDelete = true
+        reason = 'Webhook de teste'
+      }
+
+      if (shouldDelete) {
+        toDelete.push({ webhook, reason })
+      }
+    }
+
+    console.log(`Encontrados ${toDelete.length} webhooks para limpeza:`)
+    toDelete.forEach(({ webhook, reason }) => {
+      console.log(`- ${webhook.name}: ${reason}`)
+    })
+
+    if (dryRun) {
+      console.log('Executação simulada - nenhum webhook foi deletado')
+      return toDelete
+    }
+
+    const deleted = []
+    for (const { webhook } of toDelete) {
+      try {
+        const result = await this.webhookManager.deleteWebhook(webhook.id)
+        deleted.push(result)
+        console.log(`Deletado: ${webhook.name}`)
+      } catch (error) {
+        console.error(`❌ Erro ao deletar ${webhook.name}: ${error.message}`)
+      }
+    }
+
+    return deleted
+  }
+
+  isOldAndUnused(webhook, days) {
+    if (!webhook.lastTriggered) return true
+    
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+    return new Date(webhook.lastTriggered) < cutoff
+  }
+
+  isTestWebhook(webhook) {
+    const testPatterns = ['test', 'dev', 'staging', 'ngrok', 'localhost']
+    const name = webhook.name.toLowerCase()
+    const url = webhook.url.toLowerCase()
+    
+    return testPatterns.some(pattern => 
+      name.includes(pattern) || url.includes(pattern)
+    )
+  }
+}
+
+// Uso
+const cleaner = new WebhookCleaner(webhookManager)
+
+// Limpeza com simulação
+await cleaner.cleanupOldWebhooks({ dryRun: true })
+
+// Limpeza real (cuidado!)
+await cleaner.cleanupOldWebhooks({
+  deleteInactive: true,
+  deleteOldUnused: true,
+  unusedDays: 60,
+  deleteTestWebhooks: true
+})
+```
+
+### 3. Backup Antes da Exclusão
+
+```javascript
+async function backupWebhookConfig(webhookId) {
+  const webhook = await webhookManager.getWebhook(webhookId)
+  
+  if (!webhook) return null
+
+  const backup = {
+    id: webhook.id,
+    name: webhook.name,
+    url: webhook.url,
+    events: webhook.events,
+    isActive: webhook.isActive,
+    backupDate: new Date().toISOString()
+  }
+
+  // Salvar backup (exemplo em arquivo)
+  const fs = require('fs')
+  const backupFile = `webhook_backup_${webhookId}_${Date.now()}.json`
+  fs.writeFileSync(backupFile, JSON.stringify(backup, null, 2))
+  
+  console.log(`Backup salvo: ${backupFile}`)
+  return backup
+}
+
+async function deleteWithBackup(webhookId) {
+  // Fazer backup primeiro
+  const backup = await backupWebhookConfig(webhookId)
+  
+  if (!backup) {
+    throw new Error('Não foi possível fazer backup do webhook')
+  }
+
+  // Deletar webhook
+  const result = await webhookManager.deleteWebhook(webhookId)
+  
+  console.log('Webhook deletado com backup realizado')
+  return { result, backup }
+}
+```
+
+## ❌ Códigos de Erro
+
+| Código | Erro | Descrição | Solução |
+|--------|------|-----------|---------|
+| `404` | Webhook não encontrado | ID não existe | Verificar ID correto |
+| `403` | Acesso negado | Sem permissão | Verificar permissões |
+| `409` | Webhook em uso | Sendo usado ativamente | Desativar antes de deletar |
+
+### Exemplo de Tratamento
+
+```javascript
+async function deleteWebhookWithErrorHandling(webhookId) {
+  try {
+    return await webhookManager.deleteWebhook(webhookId)
+  } catch (error) {
+    switch (error.status) {
+      case 404:
+        console.warn('Webhook não encontrado - pode já ter sido deletado')
+        return null
+      case 403:
+        throw new Error('Sem permissão para deletar este webhook')
+      case 409:
+        console.log('Webhook em uso - desativando primeiro...')
+        await webhookManager.updateWebhook(webhookId, { isActive: false })
+        // Aguardar um pouco e tentar novamente
+        await new Promise(resolve => setTimeout(resolve, 5000))
+        return await webhookManager.deleteWebhook(webhookId)
+      default:
+        throw new Error(`Erro interno: ${error.message}`)
+    }
+  }
+}
+```
+
+## Script de manutenção
+
+```javascript
+// Script para executar limpeza periódica
+async function maintenanceCleanup() {
+  console.log('Iniciando limpeza de webhooks...')
+  
+  try {
+    const webhooks = await webhookManager.listWebhooks()
+    console.log(`Total de webhooks: ${webhooks.length}`)
+    
+    // 1. Remover webhooks inativos há mais de 30 dias
+    const inactiveOld = webhooks.filter(w => 
+      !w.isActive && 
+      isOlderThan(w.createdAt, 30) &&
+      !isRecentlyUsed(w, 30)
+    )
+    
+    console.log(`Removendo ${inactiveOld.length} webhooks inativos antigos...`)
+    for (const webhook of inactiveOld) {
+      await webhookManager.deleteWebhook(webhook.id)
+    }
+    
+    // 2. Remover webhooks de teste em produção
+    if (process.env.NODE_ENV === 'production') {
+      const testWebhooks = webhooks.filter(w => 
+        w.name.toLowerCase().includes('test') ||
+        w.url.includes('ngrok') ||
+        w.url.includes('localhost')
+      )
+      
+      console.log(`Removendo ${testWebhooks.length} webhooks de teste...`)
+      for (const webhook of testWebhooks) {
+        await webhookManager.deleteWebhook(webhook.id)
+      }
+    }
+    
+    console.log('Limpeza concluída!')
+    
+  } catch (error) {
+    console.error('Erro na limpeza:', error.message)
+  }
+}
+
+function isOlderThan(dateString, days) {
+  const date = new Date(dateString)
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  return date < cutoff
+}
+
+function isRecentlyUsed(webhook, days) {
+  if (!webhook.lastTriggered) return false
+  const lastUsed = new Date(webhook.lastTriggered)
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+  return lastUsed > cutoff
+}
+
+// Executar limpeza semanalmente
+setInterval(maintenanceCleanup, 7 * 24 * 60 * 60 * 1000)
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Listar webhooks" icon="list" href="/pages/webhook/list">
+    Veja todos os webhooks configurados
+  </Card>
+  <Card title="➕ Criar Webhook" icon="plus" href="/pages/webhook/create">
+    Configure novos webhooks
+  </Card>
+  <Card title="Eventos disponíveis" icon="calendar-days" href="/pages/webhook/events">
+    Conheça todos os eventos disponíveis
+  </Card>
+  <Card title="Verificar assinatura" icon="shield-check" href="/webhook">
+    Implemente validação de assinatura
+  </Card>
+</CardGroup> 

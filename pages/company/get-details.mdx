@@ -1,0 +1,122 @@
+---
+title: 'Obter Detalhes da Empresa'
+description: 'Consulte os dados da sua empresa e vendedores associados'
+---
+
+## Visão Geral
+
+Este endpoint retorna os detalhes da empresa autenticada, incluindo informações cadastrais e a lista de vendedores associados.
+
+## Requisição
+
+<Note>
+  Este endpoint não requer parâmetros. A empresa é identificada automaticamente pelo token JWT.
+</Note>
+
+### Headers
+
+| Header | Tipo | Obrigatório | Descrição |
+|--------|------|-------------|-----------|
+| `Authorization` | string | Sim | Token Bearer JWT |
+
+## Exemplo de Requisição
+
+<CodeGroup>
+
+```bash cURL
+curl -X GET 'https://api.quantumpay.com.br/api/v1/company' \
+  -H 'Authorization: Bearer SEU_TOKEN_JWT'
+```
+
+```javascript Node.js
+const axios = require('axios');
+
+const response = await axios.get('https://api.quantumpay.com.br/api/v1/company', {
+  headers: {
+    'Authorization': 'Bearer SEU_TOKEN_JWT'
+  }
+});
+
+console.log(response.data);
+```
+
+```python Python
+import requests
+
+response = requests.get(
+    'https://api.quantumpay.com.br/api/v1/company',
+    headers={
+        'Authorization': 'Bearer SEU_TOKEN_JWT'
+    }
+)
+
+print(response.json())
+```
+
+</CodeGroup>
+
+## Resposta
+
+### Resposta de Sucesso (200)
+
+```json
+{
+  "success": true,
+  "data": {
+    "company": {
+      "id": "comp_abc123def456ghi789",
+      "name": "Empresa Exemplo Ltda",
+      "document": "12345678000199",
+      "fantasyName": "Exemplo Corp",
+      "status": "active"
+    },
+    "sellers": [
+      {
+        "id": "seller_xyz789uvw012",
+        "name": "João Silva",
+        "email": "joao.silva@exemplo.com",
+        "document": "12345678901"
+      }
+    ]
+  }
+}
+```
+
+### Campos da Resposta
+
+#### Objeto `company`
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | ID único da empresa |
+| `name` | string | Razão social da empresa |
+| `document` | string | CNPJ da empresa (apenas números) |
+| `fantasyName` | string \| null | Nome fantasia da empresa |
+| `status` | string | Status da empresa: `active`, `inactive`, `pending` |
+
+#### Objeto `sellers` (array)
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | string | ID único do vendedor |
+| `name` | string | Nome completo do vendedor |
+| `email` | string | Email do vendedor |
+| `document` | string | CPF do vendedor (apenas números) |
+
+## Códigos de Erro
+
+| Código | Descrição |
+|--------|-----------|
+| `401` | Token de autenticação inválido ou expirado |
+| `429` | Limite de requisições excedido |
+
+## Casos de Uso
+
+<CardGroup cols={2}>
+  <Card title="Validação de Cadastro" icon="check">
+    Verifique se os dados da empresa estão corretos antes de iniciar operações
+  </Card>
+  <Card title="Dashboard" icon="chart-line">
+    Exiba informações da empresa no painel administrativo
+  </Card>
+</CardGroup>

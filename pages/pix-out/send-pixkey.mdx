@@ -1,0 +1,717 @@
+---
+title: 'Enviar Transferência PIX'
+description: 'Guia completo para enviar transferências PIX para chaves PIX'
+---
+
+Este guia mostra como enviar transferências PIX de forma detalhada, com exemplos práticos e todas as opções disponíveis para transferências instantâneas.
+
+## Endpoint
+
+### POST `/api/v1/pix/out/pixkey`
+
+Realiza transferência PIX instantânea para uma chave PIX específica.
+
+**URL Completa:**
+- **Produção**: `https://api.quantumpay.com.br/api/v1/pix/out/pixkey`
+
+## Headers obrigatórios
+
+```http
+Content-Type: application/json
+Authorization: Bearer <seu_token_bearer>
+x-idempotency-key: <chave_unica_para_evitar_duplicacao>
+```
+
+<Warning>
+  **Crítico**: Sempre use o header `x-idempotency-key` com um identificador único para evitar transferências duplicadas.
+</Warning>
+
+## Parâmetros do corpo
+
+### Campos Obrigatórios
+
+<AccordionGroup>
+  <Accordion title="pixKey" icon="key">
+    **Tipo**: `string`  
+    **Descrição**: Chave PIX de destino  
+    **Formatos aceitos**: CPF, CNPJ, email, telefone ou chave aleatória
+    
+    ```json
+    // Exemplos válidos
+    {
+      "pixKey": "11122233344"                           // CPF
+      "pixKey": "11222333000144"                        // CNPJ
+      "pixKey": "contato@exemplo.com"                   // Email
+      "pixKey": "+5511912345678"                        // Telefone
+      "pixKey": "abc12345-de67-89fg-hijk-lmnopqrstuv0" // Chave aleatória
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="amount" icon="dollar-sign">
+    **Tipo**: `number`  
+    **Descrição**: Valor em centavos  
+    **Mínimo**: 1 centavo (R$ 0,01)  
+    **Máximo**: 1.000.000.000 centavos (R$ 10.000.000,00)
+    
+    ```json
+    {
+      "amount": 150000  // R$ 1.500,00
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Campos opcionais
+
+<AccordionGroup>
+  <Accordion title="currency" icon="coins">
+    **Tipo**: `string`  
+    **Descrição**: Moeda da transferência  
+    **Padrão**: `"BRL"`  
+    **Valores aceitos**: Apenas `"BRL"`
+    
+    ```json
+    {
+      "currency": "BRL"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="description" icon="file-text">
+    **Tipo**: `string`  
+    **Descrição**: Descrição da transferência  
+    **Limite**: 140 caracteres  
+    **Padrão**: Vazio
+    
+    ```json
+    {
+      "description": "Pagamento de fornecedor - NF 12345"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="postbackUrl" icon="webhook">
+    **Tipo**: `string`  
+    **Descrição**: URL para receber notificações de status da transferência  
+    **Formato**: URL válida com protocolo HTTPS  
+    **Padrão**: Vazio
+    
+    ```json
+    {
+      "postbackUrl": "https://exemplo.com.br/webhook/pix-out"
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Exemplos práticos
+
+### Exemplo Básico - CPF
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/out/pixkey' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'x-idempotency-key: idempotency_exemplo_001' \
+  --data '{
+    "pixKey": "11122233344",
+    "amount": 10000,
+    "currency": "BRL",
+    "description": "Transfer PIX Exemplo",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-out"
+  }'
+```
+
+### Exemplo Email - Fornecedor
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/out/pixkey' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'x-idempotency-key: idempotency_exemplo_002' \
+  --data '{
+    "pixKey": "fornecedor@exemplo.com",
+    "amount": 20000,
+    "currency": "BRL",
+    "description": "Pagamento fornecedor - NF Exemplo",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-out"
+  }'
+```
+
+### Exemplo CNPJ - B2B
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/out/pixkey' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'x-idempotency-key: idempotency_exemplo_003' \
+  --data '{
+    "pixKey": "11222333000144",
+    "amount": 50000,
+    "currency": "BRL",
+    "description": "Pagamento parcela contrato Exemplo",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-out"
+  }'
+```
+
+### Exemplo Telefone - Afiliado
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/out/pixkey' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'x-idempotency-key: idempotency_exemplo_004' \
+  --data '{
+    "pixKey": "+5511912345678",
+    "amount": 15000,
+    "currency": "BRL",
+    "description": "Comissão Exemplo - Afiliado",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-out"
+  }'
+```
+
+## Resposta de sucesso (200)
+
+```json
+{
+  "success": true,
+  "message": "Transferência criada com sucesso",
+  "data": {
+    "id": "transfer_abc123def456",
+    "status": "queued",
+    "amount": 10000,
+    "netAmount": 10000,
+    "fees": 0,
+    "pixKey": "11122233344"
+  }
+}
+```
+
+### Campos da Resposta
+
+| Campo | Descrição |
+|-------|-----------|
+| `id` | ID único da transferência |
+| `status` | Status atual da transferência (queued, processing, completed, canceled) |
+| `amount` | Valor total da transferência |
+| `netAmount` | Valor líquido após dedução de taxas |
+| `fees` | Taxa cobrada na transferência |
+| `pixKey` | Chave PIX de destino |
+
+## Acompanhamento de status
+
+### Via Webhook (Recomendado)
+
+Configure um webhook via `postbackUrl` para receber atualizações automáticas:
+
+```json
+{
+  "id": "transfer_abc123def456",
+  "type": "transfer",
+  "event": "transfer_completed",
+  "scope": "postback",
+  "transfer": {
+    "id": "transfer_abc123def456",
+    "amount": 10000,
+    "status": "completed",
+    "pix": {
+      "endToEndId": "E00000000202401011200000000000000",
+      "creditorAccount": null
+    }
+  }
+}
+```
+
+### Eventos Webhook Disponíveis
+
+Os seguintes eventos serão enviados para o `postbackUrl` configurado:
+
+| Evento | Descrição |
+|--------|-----------|
+| `transfer_created` | Transferência criada e validada |
+| `transfer_updated` | Status da transferência foi atualizado |
+| `transfer_completed` | Transferência concluída com sucesso |
+| `transfer_canceled` | Transferência foi cancelada |
+
+### Possíveis Status da Transferência
+
+| Status | Descrição |
+|--------|-----------|
+| `queued` | Transferência em fila para processamento |
+| `processing` | Transferência sendo processada |
+| `completed` | Transferência concluída com sucesso |
+| `canceled` | Transferência foi cancelada |
+
+### Via Polling (Alternativo)
+
+```bash
+# Consultar status da transferência
+curl -X GET 'https://api.quantumpay.com.br/api/v1/transfers/transfer_abc123def456' \
+  -H 'Authorization: Bearer SEU_TOKEN_AQUI'
+```
+
+## Implementações por linguagem
+
+### JavaScript/Node.js
+
+```javascript
+class PixTransfer {
+  constructor(auth) {
+    this.auth = auth
+  }
+
+  async sendToPixKey(pixKey, amount, description = '', postbackUrl = '', idempotencyKey = null) {
+    if (!idempotencyKey) {
+      idempotencyKey = this.generateIdempotencyKey(pixKey, amount)
+    }
+
+    const transferData = {
+      pixKey,
+      amount,
+      currency: 'BRL',
+      description,
+      postbackUrl
+    }
+
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(
+        'POST',
+        '/api/v1/pix/out/pixkey',
+        transferData,
+        { 'x-idempotency-key': idempotencyKey }
+      )
+
+      return response.data.data
+    } catch (error) {
+      throw new Error(`Erro na transferência: ${error.message}`)
+    }
+  }
+
+  generateIdempotencyKey(pixKey, amount) {
+    const timestamp = Date.now()
+    const hash = require('crypto')
+      .createHash('md5')
+      .update(`${pixKey}_${amount}_${timestamp}`)
+      .digest('hex')
+    return `transfer_${hash.substring(0, 16)}`
+  }
+
+  async waitForCompletion(transferId, timeoutMs = 60000) {
+    const startTime = Date.now()
+    const checkInterval = 3000 // 3 segundos
+
+    while (Date.now() - startTime < timeoutMs) {
+      const transfer = await this.getTransfer(transferId)
+      
+      if (transfer.status === 'completed') {
+        return transfer
+      } else if (transfer.status === 'refused' || transfer.status === 'canceled') {
+        throw new Error(`Transferência ${transfer.status}: ${transfer.reason}`)
+      }
+
+      await new Promise(resolve => setTimeout(resolve, checkInterval))
+    }
+
+    throw new Error('Timeout: transferência não foi concluída no tempo esperado')
+  }
+
+  async getTransfer(transferId) {
+    const response = await this.auth.makeAuthenticatedRequest(
+      'GET',
+      `/api/v1/transfers/${transferId}`
+    )
+    return response.data.data
+  }
+}
+
+// Uso
+const pixTransfer = new PixTransfer(authInstance)
+
+try {
+  const transfer = await pixTransfer.sendToPixKey(
+    'fornecedor@exemplo.com',
+    20000,
+    'Pagamento NF Exemplo',
+    'https://exemplo.com.br/webhook/pix-out'
+  )
+
+  console.log('Transferência iniciada:', transfer.id)
+
+  // Aguardar conclusão via webhook ou polling
+  const completedTransfer = await pixTransfer.waitForCompletion(transfer.id)
+  console.log('Transferência concluída:', completedTransfer.status)
+} catch (error) {
+  console.error('Erro:', error.message)
+}
+```
+
+### Python
+
+```python
+import time
+import hashlib
+from datetime import datetime
+
+class PixTransfer:
+    def __init__(self, auth_instance):
+        self.auth = auth_instance
+
+    def send_to_pix_key(self, pix_key, amount, description='', postback_url='', idempotency_key=None):
+        if not idempotency_key:
+            idempotency_key = self.generate_idempotency_key(pix_key, amount)
+
+        transfer_data = {
+            'pixKey': pix_key,
+            'amount': amount,
+            'currency': 'BRL',
+            'description': description,
+            'postbackUrl': postback_url
+        }
+
+        headers = {'x-idempotency-key': idempotency_key}
+
+        response = self.auth.make_authenticated_request(
+            'POST',
+            '/api/v1/pix/out/pixkey',
+            transfer_data,
+            additional_headers=headers
+        )
+
+        if response.status_code == 200:
+            return response.json()['data']
+        else:
+            raise Exception(f"Erro na transferência: {response.text}")
+
+    def generate_idempotency_key(self, pix_key, amount):
+        timestamp = str(int(time.time() * 1000))
+        data = f"{pix_key}_{amount}_{timestamp}"
+        hash_obj = hashlib.md5(data.encode())
+        return f"transfer_{hash_obj.hexdigest()[:16]}"
+
+    def wait_for_completion(self, transfer_id, timeout_seconds=60):
+        start_time = time.time()
+        check_interval = 3  # 3 segundos
+
+        while time.time() - start_time < timeout_seconds:
+            transfer = self.get_transfer(transfer_id)
+            
+            if transfer['status'] == 'completed':
+                return transfer
+            elif transfer['status'] in ['refused', 'canceled']:
+                raise Exception(f"Transferência {transfer['status']}: {transfer.get('reason', 'Motivo não informado')}")
+
+            time.sleep(check_interval)
+
+        raise Exception('Timeout: transferência não foi concluída no tempo esperado')
+
+    def get_transfer(self, transfer_id):
+        response = self.auth.make_authenticated_request(
+            'GET',
+            f'/api/v1/transfers/{transfer_id}'
+        )
+        return response.json()['data']
+
+# Uso
+pix_transfer = PixTransfer(auth_instance)
+
+try:
+    transfer = pix_transfer.send_to_pix_key(
+        'fornecedor@exemplo.com',
+        20000,
+        'Pagamento NF Exemplo',
+        'https://exemplo.com.br/webhook/pix-out'
+    )
+
+    print(f'Transferência iniciada: {transfer["id"]}')
+
+    # Aguardar conclusão via webhook ou polling
+    completed_transfer = pix_transfer.wait_for_completion(transfer['id'])
+    print(f'Transferência concluída: {completed_transfer["status"]}')
+except Exception as error:
+    print(f'Erro: {error}')
+```
+
+### PHP
+
+```php
+<?php
+
+class PixTransfer {
+    private $auth;
+
+    public function __construct($authInstance) {
+        $this->auth = $authInstance;
+    }
+
+    public function sendToPixKey($pixKey, $amount, $description = '', $postbackUrl = '', $idempotencyKey = null) {
+        if (!$idempotencyKey) {
+            $idempotencyKey = $this->generateIdempotencyKey($pixKey, $amount);
+        }
+
+        $transferData = [
+            'pixKey' => $pixKey,
+            'amount' => $amount,
+            'currency' => 'BRL',
+            'description' => $description,
+            'postbackUrl' => $postbackUrl
+        ];
+
+        $headers = ['x-idempotency-key' => $idempotencyKey];
+
+        $response = $this->auth->makeAuthenticatedRequest(
+            'POST',
+            '/api/v1/pix/out/pixkey',
+            $transferData,
+            $headers
+        );
+
+        $data = json_decode($response, true);
+
+        if ($data['success']) {
+            return $data['data'];
+        } else {
+            throw new Exception("Erro na transferência: " . $response);
+        }
+    }
+
+    private function generateIdempotencyKey($pixKey, $amount) {
+        $timestamp = round(microtime(true) * 1000);
+        $data = "{$pixKey}_{$amount}_{$timestamp}";
+        $hash = md5($data);
+        return "transfer_" . substr($hash, 0, 16);
+    }
+
+    public function waitForCompletion($transferId, $timeoutSeconds = 60) {
+        $startTime = time();
+        $checkInterval = 3; // 3 segundos
+
+        while (time() - $startTime < $timeoutSeconds) {
+            $transfer = $this->getTransfer($transferId);
+            
+            if ($transfer['status'] === 'completed') {
+                return $transfer;
+            } elseif (in_array($transfer['status'], ['refused', 'canceled'])) {
+                $reason = $transfer['reason'] ?? 'Motivo não informado';
+                throw new Exception("Transferência {$transfer['status']}: {$reason}");
+            }
+
+            sleep($checkInterval);
+        }
+
+        throw new Exception('Timeout: transferência não foi concluída no tempo esperado');
+    }
+
+    public function getTransfer($transferId) {
+        $response = $this->auth->makeAuthenticatedRequest(
+            'GET',
+            "/api/v1/transfers/{$transferId}"
+        );
+
+        $data = json_decode($response, true);
+        return $data['data'];
+    }
+}
+
+// Uso
+$pixTransfer = new PixTransfer($authInstance);
+
+try {
+    $transfer = $pixTransfer->sendToPixKey(
+        'fornecedor@exemplo.com',
+        20000,
+        'Pagamento NF Exemplo',
+        'https://exemplo.com.br/webhook/pix-out'
+    );
+
+    echo "Transferência iniciada: " . $transfer['id'] . "\n";
+
+    // Aguardar conclusão via webhook ou polling
+    $completedTransfer = $pixTransfer->waitForCompletion($transfer['id']);
+    echo "Transferência concluída: " . $completedTransfer['status'] . "\n";
+} catch (Exception $error) {
+    echo "Erro: " . $error->getMessage() . "\n";
+}
+?>
+```
+
+## Chaves de idempotência
+
+### Estratégias Recomendadas
+
+<AccordionGroup>
+  <Accordion title="Por data + referência" icon="calendar">
+    Ideal para pagamentos programados ou recorrentes:
+    
+    ```javascript
+    function gerarPorReferencia(referencia, data = null) {
+      const dataFormatada = data || new Date().toISOString().split('T')[0]
+      return `transfer_${referencia}_${dataFormatada}`
+    }
+    
+    // Exemplo: transfer_supplier_123_2024-01-20
+    ```
+  </Accordion>
+  
+  <Accordion title="UUID + timestamp" icon="clock">
+    Para transferências únicas sem referência específica:
+    
+    ```javascript
+    const { v4: uuidv4 } = require('uuid')
+    
+    function gerarUUID() {
+      return `transfer_${uuidv4()}`
+    }
+    
+    // Exemplo: transfer_123e4567-e89b-12d3-a456-426614174000
+    ```
+  </Accordion>
+  
+  <Accordion title="Hash dos dados" icon="hashtag">
+    Baseado nos dados da transferência:
+    
+    ```javascript
+    const crypto = require('crypto')
+    
+    function gerarPorDados(pixKey, amount, description) {
+      const data = `${pixKey}_${amount}_${description}_${Date.now()}`
+      const hash = crypto.createHash('sha256').update(data).digest('hex')
+      return `transfer_${hash.substring(0, 16)}`
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## ❌ Tratamento de Erros
+
+### Códigos de Erro Específicos
+
+| Código | Erro | Descrição | Solução |
+|--------|------|-----------|---------|
+| `400` | `INVALID_PIX_KEY` | Chave PIX inválida | Validar formato da chave |
+| `400` | `INVALID_AMOUNT` | Valor inválido | Verificar limites min/max |
+| `402` | `INSUFFICIENT_BALANCE` | Saldo insuficiente | Verificar saldo disponível |
+| `409` | `DUPLICATE_IDEMPOTENCY_KEY` | Chave duplicada | Usar nova chave única |
+| `422` | `DAILY_LIMIT_EXCEEDED` | Limite diário excedido | Aguardar próximo dia |
+| `422` | `RECIPIENT_UNAVAILABLE` | Destinatário indisponível | Verificar chave PIX |
+
+### Exemplo de Tratamento Completo
+
+```javascript
+async function enviarComTratamentoCompleto(dados) {
+  const maxRetries = 3
+  let attempt = 0
+
+  while (attempt < maxRetries) {
+    try {
+      return await pixTransfer.sendToPixKey(
+        dados.pixKey,
+        dados.amount,
+        dados.description
+      )
+    } catch (error) {
+      attempt++
+      
+      switch (error.code) {
+        case 'INSUFFICIENT_BALANCE':
+          throw new Error('Saldo insuficiente. Verifique seu saldo e tente novamente.')
+        
+        case 'INVALID_PIX_KEY':
+          throw new Error('Chave PIX inválida. Verifique o formato da chave.')
+        
+        case 'DAILY_LIMIT_EXCEEDED':
+          throw new Error('Limite diário de transferências excedido.')
+        
+        case 'RECIPIENT_UNAVAILABLE':
+          throw new Error('Destinatário temporariamente indisponível. Tente novamente mais tarde.')
+        
+        case 'RATE_LIMIT':
+          if (attempt < maxRetries) {
+            // Aguardar antes de tentar novamente
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+            continue
+          }
+          throw new Error('Muitas tentativas. Aguarde alguns minutos e tente novamente.')
+        
+        default:
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+            continue
+          }
+          throw new Error('Erro interno. Entre em contato com o suporte.')
+      }
+    }
+  }
+}
+```
+
+## Validações recomendadas
+
+### Validação Completa Antes do Envio
+
+```javascript
+function validarDadosTransferencia(dadosTransferencia) {
+  const { pixKey, amount, description } = dadosTransferencia
+  const erros = []
+
+  // Validar chave PIX
+  if (!pixKey || !validarChavePIX(pixKey)) {
+    erros.push('Chave PIX inválida')
+  }
+
+  // Validar valor
+  if (!amount || amount < 1) {
+    erros.push('Valor deve ser maior que R$ 0,01')
+  }
+
+  if (amount > 1000000000) {
+    erros.push('Valor máximo é R$ 10.000.000,00')
+  }
+
+  // Validar descrição
+  if (description && description.length > 140) {
+    erros.push('Descrição deve ter no máximo 140 caracteres')
+  }
+
+  if (erros.length > 0) {
+    throw new Error('Dados inválidos: ' + erros.join(', '))
+  }
+
+  return true
+}
+```
+
+### Simulação Antes do Envio
+
+```javascript
+async function simularTransferencia(dados) {
+  // Verificar se seria bem-sucedida sem executar
+  return {
+    pixKey: dados.pixKey,
+    amount: dados.amount,
+    fees: 300, // R$ 3,00
+    netAmount: dados.amount - 300,
+    estimatedTime: '10 segundos',
+    valid: true
+  }
+}
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Configurar webhooks" icon="webhook" href="/webhook">
+    Configure notificações automáticas de transferências
+  </Card>
+  <Card title="PIX IN" icon="qrcode" href="/pages/pix-in/overview">
+    Aprenda a receber pagamentos PIX
+  </Card>
+  <Card title="Status e códigos" icon="list" href="/pages/reference/status-codes">
+    Entenda os status e códigos de erro
+  </Card>
+  <Card title="Segurança" icon="shield-check" href="/security">
+    Boas práticas de segurança para transferências
+  </Card>
+</CardGroup> 

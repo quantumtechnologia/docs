@@ -1,0 +1,790 @@
+---
+title: 'Webhooks'
+description: 'Sistema de notificações automáticas em tempo real'
+---
+
+Os webhooks da API Quantum Pay permitem que sua aplicação receba notificações automáticas quando eventos importantes acontecem em sua conta, como pagamentos recebidos, transferências concluídas e mudanças de status.
+
+## Como funcionam
+
+Os webhooks são enviados automaticamente via **POST** para as URLs que você configurar sempre que eventos relevantes ocorrem em sua conta. Isso elimina a necessidade de fazer polling constante na API.
+
+### Vantagens
+
+<CardGroup cols={2}>
+  <Card title="Tempo real" icon="bolt">
+    Receba notificações instantâneas sobre mudanças importantes
+  </Card>
+  <Card title="Confiabilidade" icon="shield-check">
+    Sistema de retry automático para garantir entrega
+  </Card>
+  <Card title="Segurança" icon="lock">
+    Verificação de assinatura HMAC-SHA256 para autenticidade
+  </Card>
+  <Card title="Flexibilidade" icon="sliders">
+    Configure diferentes endpoints para diferentes tipos de evento
+  </Card>
+</CardGroup>
+
+## Eventos disponíveis
+
+### Eventos de transação (PIX IN)
+
+| Evento                   | Descrição                    | Quando é enviado                |
+|--------------------------|------------------------------|---------------------------------|
+| `transaction_created`    | Transação criada             | QR Code gerado com sucesso      |
+| `transaction_paid`       | Transação paga               | PIX recebido e confirmado       |
+| `transaction_refunded`   | Transação estornada          | Estorno processado              |
+| `transaction_infraction` | Infração na transação        | Problemas detectados pelo BC    |
+
+### Eventos de transferência (PIX OUT)
+
+| Evento               | Descrição                | Quando é enviado        |
+|----------------------|--------------------------|-------------------------|
+| `transfer_created`   | Transferência criada     | Transferência iniciada  |
+| `transfer_completed` | Transferência concluída  | PIX enviado com sucesso |
+| `transfer_canceled`  | Transferência cancelada  | Transferência cancelada |
+| `transfer_updated`   | Transferência atualizada | Status alterado         |
+
+## Estrutura de payloads
+
+### Webhook de Transação (PIX IN)
+
+```json
+{
+  "id": "wh_64f8a2b1c3d4e5f6g7h8i9j0",
+  "type": "transaction",
+  "event": "transaction_paid",
+  "scope": "user",
+  "transaction": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "amount": 5000,
+    "status": "paid",
+    "pix": {
+      "endToEndId": "E00000000202401011200000000000000",
+      "payerInfo": {
+        "name": "Cliente Pagador",
+        "document": "11122233344"
+      }
+    }
+  }
+}
+```
+
+### Webhook de Transferência (PIX OUT)
+
+```json
+{
+  "id": "transfer_abc123def456",
+  "type": "transfer",
+  "event": "transfer_completed",
+  "scope": "postback",
+  "transfer": {
+    "id": "transfer_abc123def456",
+    "amount": 10000,
+    "status": "completed",
+    "pix": {
+      "endToEndId": "E00000000202401011200000000000000",
+      "creditorAccount": null
+    }
+  }
+}
+```
+
+## Verificação de assinatura
+
+<Warning>
+  **IMPORTANTE**: Sempre verifique a assinatura dos webhooks para garantir autenticidade e segurança.
+</Warning>
+
+Toda notificação que enviamos para o seu endpoint é assinada. Fazemos isso incluindo um header com o nome `Quantumpay-Signature` em cada evento que enviamos. Isso permite verificar e garantir que o evento foi enviado pelo Quantum Pay e não por um terceiro.
+
+### Formato do Header Quantumpay-Signature
+
+O header `Quantumpay-Signature` contém um **timestamp** e uma ou mais **assinaturas**. O timestamp é prefixado por `t=` e cada assinatura é prefixada por um schema. Schemas começam com `v` seguido de um integer. Atualmente existe apenas um schema de assinatura que é o `v1`.
+
+**Exemplo do Header Quantumpay-Signature:**
+
+```http
+Quantumpay-Signature: t=1580306324381,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
+```
+
+As assinaturas são geradas usando **HMAC** com **SHA-256**. Para prevenir ataques de reversão de versão (downgrade attacks), você deve ignorar todos os schemas que não são `v1`.
+
+### Como Validar a Assinatura
+
+#### Passo 1: Extrair o timestamp e assinatura do Header
+
+Faça um split no header usando o caractere `,` como separador para pegar a lista de elementos. Feito isso, faça outro split usando o caractere `=` como separador, para pegar o prefixo e o valor.
+
+O valor obtido no prefixo `t` corresponde ao **timestamp** e o `v1` corresponde à **assinatura**. Você pode descartar outros valores.
+
+#### Passo 2: Preparar a string para comparar as assinaturas
+
+Você deve concatenar essas informações:
+1. O timestamp (como string)
+2. O caractere `.`
+3. O payload JSON raw (corpo da requisição, em formato de string)
+
+Computar o HMAC com a função hash SHA256. Use o `signatureSecret` recebido na hora da criação do webhook e use a string `signed_payload` como mensagem.
+
+#### Passo 3: Comparar as assinaturas
+
+Compare a assinatura enviada pelo Quantum Pay no header com a assinatura que você gerou no Passo 2.
+
+### Exemplo Completo em Node.js
+
+```javascript
+const crypto = require('crypto')
+
+function verifyWebhookSignature(requestHeaders, requestPayload, secretKey) {
+  // Passo 1: Extrair timestamp e assinatura do header
+  const signatureHeader = requestHeaders['quantumpay-signature']
+  
+  if (!signatureHeader) {
+    throw new Error('Header Quantumpay-Signature não encontrado')
+  }
+  
+  const elements = signatureHeader.split(',')
+  let timestamp, signature
+  
+  for (const element of elements) {
+    const [prefix, value] = element.split('=')
+    if (prefix === 't') {
+      timestamp = value
+    } else if (prefix === 'v1') {
+      signature = value
+    }
+  }
+  
+  if (!timestamp || !signature) {
+    throw new Error('Timestamp ou assinatura não encontrados no header')
+  }
+  
+  // Passo 2: Preparar a string para comparação
+  const signedPayload = `${timestamp}.${requestPayload}`
+  
+  // Computar HMAC
+  const computedSignature = crypto
+    .createHmac('sha256', secretKey)
+    .update(signedPayload)
+    .digest('hex')
+  
+  // Passo 3: Comparar assinaturas
+  return signature === computedSignature
+}
+
+// Uso no seu endpoint webhook
+app.post('/webhooks/quantumpay', express.raw({type: 'application/json'}), (req, res) => {
+  try {
+    const secretKey = 'whk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4' // Secret recebido na criação do webhook
+    const requestPayload = req.body.toString() // Payload raw como string
+    
+    if (!verifyWebhookSignature(req.headers, requestPayload, secretKey)) {
+      return res.status(401).send('Signature verification failed')
+    }
+    
+    // Processar webhook seguramente
+    const event = JSON.parse(requestPayload)
+    console.log('Webhook verificado:', event)
+    res.status(200).send('OK')
+    
+  } catch (error) {
+    console.error('Erro na verificação:', error.message)
+    res.status(401).send('Unauthorized')
+  }
+})
+
+// Exemplo detalhado com valores reais
+const secretKey = 'whk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4'
+const timestamp = '1580306991086'
+const requestPayload = '{"event":"transaction_paid","transaction":{"id":"abc123","amount":10000}}'
+
+// String para assinar: timestamp + '.' + payload
+const signedPayload = `${timestamp}.${requestPayload}`
+
+// Gerar assinatura
+const signature = crypto
+  .createHmac('sha256', secretKey)
+  .update(signedPayload)
+  .digest('hex')
+
+console.log('Assinatura gerada:', signature)
+// Output: 348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8
+```
+
+### Exemplo Completo em Python
+
+```python
+import hmac
+import hashlib
+
+def verify_webhook_signature(request_headers, request_payload, secret_key):
+    """
+    Verifica a assinatura do webhook Quantum Pay
+    """
+    # Passo 1: Extrair timestamp e assinatura do header
+    signature_header = request_headers.get('quantumpay-signature')
+    
+    if not signature_header:
+        raise ValueError('Header Quantumpay-Signature não encontrado')
+    
+    elements = signature_header.split(',')
+    timestamp = None
+    signature = None
+    
+    for element in elements:
+        prefix, value = element.split('=')
+        if prefix == 't':
+            timestamp = value
+        elif prefix == 'v1':
+            signature = value
+    
+    if not timestamp or not signature:
+        raise ValueError('Timestamp ou assinatura não encontrados no header')
+    
+    # Passo 2: Preparar a string para comparação
+    signed_payload = f"{timestamp}.{request_payload}"
+    
+    # Computar HMAC
+    computed_signature = hmac.new(
+        secret_key.encode('utf-8'),
+        signed_payload.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    
+    # Passo 3: Comparar assinaturas
+    return signature == computed_signature
+
+# Uso no Flask
+from flask import Flask, request
+
+app = Flask(__name__)
+
+@app.route('/webhooks/quantumpay', methods=['POST'])
+def handle_webhook():
+    try:
+        secret_key = 'whk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4'
+        request_payload = request.get_data().decode('utf-8')  # Payload raw como string
+        
+        if not verify_webhook_signature(request.headers, request_payload, secret_key):
+            return 'Unauthorized', 401
+        
+        # Processar webhook seguramente
+        import json
+        event = json.loads(request_payload)
+        print('Webhook verificado:', event)
+        return 'OK', 200
+        
+    except Exception as error:
+        print(f'Erro na verificação: {error}')
+        return 'Unauthorized', 401
+
+# Exemplo detalhado com valores reais
+secret_key = 'whk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4'
+timestamp = '1580306991086'
+request_payload = '{"event":"transaction_paid","transaction":{"id":"abc123","amount":10000}}'
+
+# String para assinar: timestamp + '.' + payload
+signed_payload = f"{timestamp}.{request_payload}"
+
+# Gerar assinatura
+signature = hmac.new(
+    secret_key.encode('utf-8'),
+    signed_payload.encode('utf-8'),
+    hashlib.sha256
+).hexdigest()
+
+print(f'Assinatura gerada: {signature}')
+# Output: 348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8
+```
+
+### Exemplo Completo em PHP
+
+```php
+<?php
+
+function verifyWebhookSignature($requestHeaders, $requestPayload, $secretKey) {
+    // Passo 1: Extrair timestamp e assinatura do header
+    $signatureHeader = $requestHeaders['quantumpay-signature'] ?? $requestHeaders['Quantumpay-Signature'] ?? null;
+    
+    if (!$signatureHeader) {
+        throw new Exception('Header Quantumpay-Signature não encontrado');
+    }
+    
+    $elements = explode(',', $signatureHeader);
+    $timestamp = null;
+    $signature = null;
+    
+    foreach ($elements as $element) {
+        list($prefix, $value) = explode('=', $element, 2);
+        if ($prefix === 't') {
+            $timestamp = $value;
+        } elseif ($prefix === 'v1') {
+            $signature = $value;
+        }
+    }
+    
+    if (!$timestamp || !$signature) {
+        throw new Exception('Timestamp ou assinatura não encontrados no header');
+    }
+    
+    // Passo 2: Preparar a string para comparação
+    $signedPayload = $timestamp . '.' . $requestPayload;
+    
+    // Computar HMAC
+    $computedSignature = hash_hmac('sha256', $signedPayload, $secretKey);
+    
+    // Passo 3: Comparar assinaturas
+    return hash_equals($signature, $computedSignature);
+}
+
+// Uso
+try {
+    $secretKey = 'whk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4';
+    $requestPayload = file_get_contents('php://input'); // Payload raw como string
+    $requestHeaders = getallheaders();
+    
+    if (!verifyWebhookSignature($requestHeaders, $requestPayload, $secretKey)) {
+        http_response_code(401);
+        exit('Unauthorized');
+    }
+    
+    // Processar webhook seguramente
+    $event = json_decode($requestPayload, true);
+    error_log('Webhook verificado: ' . print_r($event, true));
+    echo 'OK';
+    
+} catch (Exception $error) {
+    error_log('Erro na verificação: ' . $error->getMessage());
+    http_response_code(401);
+    exit('Unauthorized');
+}
+
+// Exemplo detalhado com valores reais
+$secretKey = 'whk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4';
+$timestamp = '1580306991086';
+$requestPayload = '{"event":"transaction_paid","transaction":{"id":"abc123","amount":10000}}';
+
+// String para assinar: timestamp + '.' + payload
+$signedPayload = $timestamp . '.' . $requestPayload;
+
+// Gerar assinatura
+$signature = hash_hmac('sha256', $signedPayload, $secretKey);
+
+echo "Assinatura gerada: " . $signature . "\n";
+// Output: 348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8
+?>
+```
+
+### ⚠️ Importante sobre o Payload
+
+<Warning>
+  **CRÍTICO**: O payload JSON deve ser mantido **exatamente como foi recebido**, sem qualquer conversão ou formatação. Qualquer alteração, como transformá-lo em um objeto e depois reconvertê-lo em string (por exemplo, usando `JSON.stringify`), pode resultar em diferenças que invalidariam a assinatura calculada.
+</Warning>
+
+### Exemplo de Extração de Valores
+
+```javascript
+// Exemplo do Header da requisição enviada pelo Quantum Pay:
+const requestHeaders = {
+  'Quantumpay-Signature': 't=1580306991086,v1=348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8'
+}
+
+// Extrair o valor de 't' do Header 'Quantumpay-Signature'
+const reqTimestamp = requestHeaders['Quantumpay-Signature'].split(',')[0].split('=')[1]
+// '1580306991086'
+
+// Extrair o valor de 'v1' do Header 'Quantumpay-Signature'
+const reqSignature = requestHeaders['Quantumpay-Signature'].split(',')[1].split('=')[1]
+// '348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8'
+
+// A assinatura que você gerou no Passo 2 deve ser igual ao valor da variável "reqSignature"
+console.log('yourSignature' === reqSignature) // Deve retornar true
+```
+
+### Validação de Timestamp (Opcional)
+
+```javascript
+function validateTimestamp(timestamp, toleranceSeconds = 300) {
+  const now = Math.floor(Date.now() / 1000)
+  const webhookTime = Math.floor(parseInt(timestamp) / 1000)
+  
+  return Math.abs(now - webhookTime) <= toleranceSeconds
+}
+
+// Uso
+if (!validateTimestamp(timestamp)) {
+  throw new Error('Timestamp muito antigo ou muito novo')
+}
+```
+
+## Certificados mTLS para webhooks
+
+<Warning>
+  **IMPORTANTE**: Por norma de segurança, é necessário configurar certificados mTLS (autenticação mútua) em seu servidor para receber webhooks do Quantum Pay.
+</Warning>
+
+### Entendendo o padrão mTLS
+
+Para garantir a segurança na comunicação, será necessário inserir a chave pública do Quantum Pay em seu servidor para que a comunicação obedeça o padrão mTLS. No domínio que representa seu servidor, você deverá configurar a exigência da chave pública (mTLS) que estamos disponibilizando, para que ocorra a autenticação mútua.
+
+### Como funciona a validação
+
+O Quantum Pay fará 2 requisições para seu domínio (servidor):
+
+1. **Primeira Requisição**: Vamos certificar que seu servidor esteja exigindo uma chave pública do Quantum Pay. Para isso, enviaremos uma requisição sem certificado e seu servidor não deverá aceitar a requisição. Caso seu servidor responda com recusa, enviaremos a 2ª requisição.
+
+2. **Segunda Requisição**: Seu servidor, que deve conter a chave pública disponibilizada, deverá realizar o "Hand-Shake" para que a comunicação seja estabelecida.
+
+### Requisitos Técnicos
+
+- **Versão mínima do TLS**: 1.2
+- **Resposta padrão**: Configure uma rota 'POST' com uma resposta padrão como string "200"
+- **Certificado**: Inclua nosso certificado de produção ou homologação em seu servidor
+
+### Certificados Disponíveis
+
+<CardGroup cols={2}>
+  <Card title="Certificado de produção" icon="shield-check">
+    **URL**: `http://api.quantumpay.com.br/ca`
+    
+    Para uso em ambiente de produção
+  </Card>
+  <Card title="Certificado de homologação" icon="flask">
+    **URL**: `http://api.quantumpay.com.br/ca`
+    
+    Para uso em ambiente de desenvolvimento/teste
+  </Card>
+</CardGroup>
+
+### Exemplo de Configuração do Servidor
+
+#### Nginx
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name seu-dominio.com;
+    
+    # Certificados SSL normais
+    ssl_certificate /path/to/your/cert.pem;
+    ssl_certificate_key /path/to/your/key.pem;
+    
+    # Configuração mTLS para webhook
+    location /webhooks/quantumpay {
+        # Exigir certificado do cliente
+        ssl_verify_client on;
+        
+        # Certificado CA do Quantum Pay
+        ssl_client_certificate /path/to/quantumpay-ca.crt;
+        
+        # Protocolo TLS mínimo
+        ssl_protocols TLSv1.2 TLSv1.3;
+        
+        proxy_pass http://localhost:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+#### Apache
+
+```apache
+<VirtualHost *:443>
+    ServerName seu-dominio.com
+    
+    SSLEngine on
+    SSLCertificateFile /path/to/your/cert.pem
+    SSLCertificateKeyFile /path/to/your/key.pem
+    
+    # Configuração mTLS para webhook
+    <Location "/webhooks/quantumpay">
+        SSLVerifyClient require
+        SSLCACertificateFile /path/to/quantumpay-ca.crt
+        SSLProtocol TLSv1.2 +TLSv1.3
+        
+        ProxyPass http://localhost:3000/webhooks/quantumpay
+        ProxyPassReverse http://localhost:3000/webhooks/quantumpay
+    </Location>
+</VirtualHost>
+```
+
+### Instalação do Certificado
+
+#### 1. Baixar o Certificado
+
+```bash
+# Baixar certificado do Quantum Pay
+curl -o quantumpay-ca.crt http://api.quantumpay.com.br/ca
+
+# Verificar o certificado
+openssl x509 -in quantumpay-ca.crt -text -noout
+```
+
+#### 2. Instalar no Servidor
+
+```bash
+# Mover para diretório de certificados
+sudo mkdir -p /etc/ssl/certs/quantumpay
+sudo mv quantumpay-ca.crt /etc/ssl/certs/quantumpay/
+
+# Definir permissões corretas
+sudo chmod 644 /etc/ssl/certs/quantumpay/quantumpay-ca.crt
+```
+
+### Servidores Dedicados
+
+<Tip>
+  **Recomendação**: Use um servidor dedicado para configurar webhooks, pois é necessário acesso a arquivos de configuração do servidor para implementar mTLS corretamente.
+</Tip>
+
+### Skip-mTLS (Hospedagem Compartilhada)
+
+Para hospedagem em servidores compartilhados, onde pode haver restrições para inserir certificados de outras entidades, disponibilizamos a opção **skip-mTLS**.
+
+#### Como funciona
+
+- Permite cadastro de webhook sem validação mTLS
+- Você fica responsável por validar nosso certificado
+- Sempre enviamos o certificado nos webhooks
+- Implementação de medidas de segurança adicionais é obrigatória
+
+#### Medidas de Segurança Recomendadas
+
+<AccordionGroup>
+  <Accordion title="Verificação de IP" icon="globe">
+    Restrinja a comunicação para aceitar apenas do IP da Quantum Pay:
+    
+    ```nginx
+    location /webhooks/quantumpay {
+        allow 34.193.116.226;  # IP da Quantum Pay
+        deny all;
+        
+        # Restante da configuração...
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Hash na URL" icon="key">
+    Adicione um HMAC à URL para validação:
+    
+    ```javascript
+    // Exemplo de implementação
+    const crypto = require('crypto')
+    
+    function generateWebhookHash(secret) {
+      return crypto
+        .createHmac('sha256', secret)
+        .update('webhook-validation')
+        .digest('hex')
+    }
+    
+    // URL com hash
+    const webhookUrl = `https://seu-dominio.com/webhook?hmac=${generateWebhookHash('seu-secret')}&ignorar=`
+    ```
+    
+    **Exemplo de URL**:
+    ```
+    Original: https://seu-dominio.com/webhook
+    Com hash: https://seu-dominio.com/webhook?hmac=xyz123&ignorar=
+    ```
+    
+    <Info>
+      O termo `ignorar=` serve para tratar a adição automática de `/pix` no final da URL pelo sistema.
+    </Info>
+  </Accordion>
+</AccordionGroup>
+
+### Validação de Certificados (Skip-mTLS)
+
+```javascript
+const crypto = require('crypto')
+const https = require('https')
+
+// Validar certificado do Quantum Pay
+function validateVexyCertificate(cert) {
+  // Verificar se o certificado é do Quantum Pay
+  const expectedIssuer = 'Quantum Pay CA'
+  
+  if (!cert.issuer.CN.includes(expectedIssuer)) {
+    throw new Error('Certificado não é do Quantum Pay')
+  }
+  
+  // Verificar se não expirou
+  const now = new Date()
+  const notAfter = new Date(cert.valid_to)
+  
+  if (now > notAfter) {
+    throw new Error('Certificado expirado')
+  }
+  
+  return true
+}
+
+// Middleware para validar certificado
+app.use('/webhooks/quantumpay', (req, res, next) => {
+  const clientCert = req.connection.getPeerCertificate()
+  
+  if (!clientCert || !validateVexyCertificate(clientCert)) {
+    return res.status(401).send('Certificado inválido')
+  }
+  
+  next()
+})
+```
+
+### Teste de Configuração
+
+```bash
+# Testar configuração mTLS
+curl -v \
+  --cert /path/to/quantumpay-ca.crt \
+  --key /path/to/quantumpay-ca.key \
+  -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"test": true}' \
+  https://seu-dominio.com/webhooks/quantumpay
+```
+
+## Implementação recomendada
+
+### 1. Endpoint Webhook Robusto
+
+```javascript
+app.post('/webhooks/quantumpay', express.raw({type: 'application/json'}), (req, res) => {
+  try {
+    // 1. Verificar assinatura
+    const signature = req.headers['quantumpay-signature']
+    if (!verifyWebhookSignature(req.body, signature, WEBHOOK_SECRET)) {
+      return res.status(401).send('Unauthorized')
+    }
+
+    // 2. Parse do payload
+    const event = JSON.parse(req.body)
+
+    // 3. Processamento idempotente
+    if (await isEventProcessed(event.id)) {
+      return res.status(200).send('Already processed')
+    }
+
+    // 4. Processar evento
+    await processWebhookEvent(event)
+
+    // 5. Marcar como processado
+    await markEventAsProcessed(event.id)
+
+    res.status(200).send('OK')
+  } catch (error) {
+    console.error('Webhook error:', error)
+    res.status(500).send('Internal server error')
+  }
+})
+```
+
+### 2. Processamento por Tipo de Evento
+
+```javascript
+async function processWebhookEvent(event) {
+  switch (event.event) {
+    case 'transaction_paid':
+      await handleTransactionPaid(event.transaction)
+      break
+    
+    case 'transfer_completed':
+      await handleTransferCompleted(event.transfer)
+      break
+    
+    default:
+      console.log('Evento não tratado:', event.event)
+  }
+}
+
+async function handleTransactionPaid(transaction) {
+  // Liberar produto/serviço
+  // Enviar email de confirmação
+  // Atualizar banco de dados
+  console.log(`Pagamento recebido: R$ ${transaction.amount / 100}`)
+}
+```
+
+## Sistema de retry
+
+Se seu endpoint não responder com status 200, implementamos um sistema de retry automático:
+
+- **1ª tentativa**: Imediatamente
+- **2ª tentativa**: Após 1 minuto
+- **3ª tentativa**: Após 5 minutos
+- **4ª tentativa**: Após 15 minutos
+- **5ª tentativa**: Após 1 hora
+
+<Tip>
+  Após 5 tentativas sem sucesso, o webhook é marcado como falhado e você pode visualizar no dashboard.
+</Tip>
+
+## Monitoramento
+
+### Dashboard de Webhooks
+
+No seu dashboard você pode:
+- Ver histórico de webhooks enviados
+- Verificar status de entrega
+- Reenviar webhooks falhados
+- Visualizar logs detalhados
+
+### Logs Úteis
+
+```javascript
+// Log estruturado para debugging
+console.log({
+  timestamp: new Date().toISOString(),
+  webhookId: event.id,
+  eventType: event.event,
+  processed: true,
+  processingTime: Date.now() - startTime
+})
+```
+
+## Solução de problemas
+
+### Problemas Comuns
+
+<AccordionGroup>
+  <Accordion title="Webhook não está sendo recebido">
+    - Verifique se a URL está acessível publicamente
+    - Confirme se está respondendo com status 200
+    - Teste com ferramentas como ngrok para desenvolvimento local
+    - Verifique se não há firewall bloqueando
+  </Accordion>
+  
+  <Accordion title="Erro de verificação de assinatura">
+    - Confirme se está usando o `signatureSecret` correto
+    - Verifique se o payload não foi modificado
+    - Use o body raw da requisição para verificação
+    - Certifique-se de usar UTF-8 encoding
+  </Accordion>
+  
+  <Accordion title="Webhooks duplicados">
+    - Implemente processamento idempotente
+    - Use o `id` do evento para deduplicação
+    - Armazene IDs processados em cache/banco
+    - Sempre responda 200 para eventos já processados
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Suporte
+
+Para configurar webhooks ou resolver problemas:
+
+**Email**: contato@quantumpay.com.br  
+**WhatsApp**: +55 11 99999-9999  
+**Documentação**: [Gerenciar Webhooks](/pages/webhook/create)
+
+<Info>
+  **Dica**: Use ferramentas como [webhook.site](https://webhook.site) para testar e debuggar seus webhooks durante o desenvolvimento.
+</Info>

@@ -1,0 +1,595 @@
+---
+title: 'Eventos de Webhook'
+description: 'Todos os eventos disponíveis para configurar em seus webhooks'
+---
+
+Esta página detalha todos os eventos disponíveis na API Quantum Pay que podem disparar webhooks, incluindo estrutura de dados e quando cada evento é enviado.
+
+## Eventos de transação (PIX IN)
+
+### `transaction_created`
+
+**Quando é enviado:** QR Code PIX criado com sucesso
+
+```json
+{
+  "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+  "type": "transaction",
+  "event": "transaction_created",
+  "scope": "postback",
+  "transaction": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "amount": 5000,
+    "status": "pending",
+    "description": "Pagamento de serviços"
+  }
+}
+```
+
+**Uso típico:** Confirmar que QR Code foi gerado, iniciar timer de expiração
+
+### `transaction_paid`
+
+**Quando é enviado:** PIX recebido e confirmado pelo sistema
+
+```json
+{
+  "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+  "type": "transaction",
+  "event": "transaction_paid",
+  "scope": "postback",
+  "transaction": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "amount": 5000,
+    "status": "paid",
+    "pix": {
+      "endToEndId": "E00000000202401011200000000000000",
+      "payerInfo": {
+        "bank": "000",
+        "name": "Cliente Pagador",
+        "branch": "0001",
+        "document": "11122233344",
+        "account_type": "CHECKING",
+        "account_number": "000000"
+      }
+    }
+  }
+}
+```
+
+**Uso típico:** Liberar produto/serviço, enviar email de confirmação, atualizar estoque
+
+### `transaction_refunded`
+
+**Quando é enviado:** Estorno processado com sucesso
+
+```json
+{
+  "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+  "type": "transaction",
+  "event": "transaction_refunded",
+  "scope": "postback",
+  "transaction": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "amount": 5000,
+    "status": "refunded",
+    "refund": {
+      "amount": 5000,
+      "reason": "Solicitação do cliente",
+      "refundedAt": "2024-01-20T14:20:00.000Z"
+    }
+  }
+}
+```
+
+**Uso típico:** Cancelar entrega, notificar cliente, restaurar estoque
+
+### `transaction_infraction`
+
+**Quando é enviado:** Problemas ou infrações detectadas pelo Banco Central
+
+```json
+{
+  "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+  "type": "transaction",
+  "event": "transaction_infraction",
+  "scope": "postback",
+  "transaction": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "amount": 5000,
+    "status": "infraction",
+    "infraction": {
+      "type": "fraud_suspected",
+      "description": "Suspeita de fraude detectada",
+      "reportedAt": "2024-01-20T15:10:00.000Z"
+    }
+  }
+}
+```
+
+**Uso típico:** Pausar entrega, revisar transação, contatar suporte
+
+## Eventos de transferência (PIX OUT)
+
+### `transfer_created`
+
+**Quando é enviado:** Transferência PIX iniciada
+
+```json
+{
+  "id": "transfer_abc123def456",
+  "type": "transfer",
+  "event": "transfer_created",
+  "scope": "postback",
+  "transfer": {
+    "id": "transfer_abc123def456",
+    "amount": 10000,
+    "status": "queued",
+    "pix": {
+      "endToEndId": null,
+      "creditorAccount": null
+    }
+  }
+}
+```
+
+**Uso típico:** Registrar tentativa de transferência, notificar solicitante
+
+**Status:** `queued` - Transferência em fila para processamento
+
+### `transfer_updated`
+
+**Quando é enviado:** Status da transferência foi atualizado
+
+```json
+{
+  "id": "transfer_abc123def456",
+  "type": "transfer",
+  "event": "transfer_updated",
+  "scope": "postback",
+  "transfer": {
+    "id": "transfer_abc123def456",
+    "amount": 10000,
+    "status": "processing",
+    "pix": {
+      "endToEndId": null,
+      "creditorAccount": null
+    }
+  }
+}
+```
+
+**Uso típico:** Atualizar status em tempo real, mostrar progresso ao usuário
+
+**Status:** `processing` - Transferência sendo processada
+
+### `transfer_completed`
+
+**Quando é enviado:** Transferência PIX concluída com sucesso
+
+```json
+{
+  "id": "transfer_abc123def456",
+  "type": "transfer",
+  "event": "transfer_completed",
+  "scope": "postback",
+  "transfer": {
+    "id": "transfer_abc123def456",
+    "amount": 10000,
+    "status": "completed",
+    "pix": {
+      "endToEndId": "E00000000202401011200000000000000",
+      "creditorAccount": null
+    }
+  }
+}
+```
+
+**Uso típico:** Confirmar pagamento, atualizar sistema financeiro, notificar destinatário
+
+**Status:** `completed` - Transferência concluída com sucesso
+
+### `transfer_canceled`
+
+**Quando é enviado:** Transferência PIX cancelada
+
+```json
+{
+  "id": "transfer_abc123def456",
+  "type": "transfer",
+  "event": "transfer_canceled",
+  "scope": "postback",
+  "transfer": {
+    "id": "transfer_abc123def456",
+    "amount": 10000,
+    "status": "canceled",
+    "pix": {
+      "endToEndId": null,
+      "creditorAccount": null
+    }
+  }
+}
+```
+
+**Uso típico:** Reverter operação, notificar erro, tentar novamente se apropriado
+
+**Status:** `canceled` - Transferência foi cancelada
+
+## Implementação por evento
+
+### Processamento de Pagamentos Recebidos
+
+```javascript
+function handleTransactionPaid(transaction) {
+  console.log(`Pagamento recebido: R$ ${transaction.amount / 100}`)
+  
+  // 1. Liberar produto/serviço
+  await releaseProduct(transaction.id)
+  
+  // 2. Enviar email de confirmação
+  await sendConfirmationEmail(transaction.customer.email, {
+    amount: transaction.amount,
+    transactionId: transaction.id,
+    paidAt: transaction.paidAt
+  })
+  
+  // 3. Atualizar sistema interno
+  await updateInternalStatus(transaction.id, 'paid')
+  
+  // 4. Atualizar estoque (se aplicável)
+  if (transaction.items) {
+    await updateInventory(transaction.items)
+  }
+  
+  console.log(`Processamento concluído para transação ${transaction.id}`)
+}
+```
+
+### Processamento de Transferências
+
+```javascript
+function handleTransferCompleted(event) {
+  const transfer = event.transfer
+  console.log(`Transferência concluída: R$ ${transfer.amount}`)
+  
+  // 1. Atualizar registro financeiro
+  await updateFinancialRecord(transfer.id, {
+    status: 'completed',
+    endToEndId: transfer.pix.endToEndId
+  })
+  
+  // 2. Notificar solicitante
+  await notifyRequester(transfer.id, 'completed')
+  
+  // 3. Registrar para auditoria
+  await logTransferCompletion(transfer)
+  
+  console.log(`Transferência ${transfer.id} processada`)
+}
+
+function handleTransferCreated(event) {
+  const transfer = event.transfer
+  console.log(`Transferência criada: ${transfer.id} - Status: ${transfer.status}`)
+  
+  // Registrar tentativa de transferência
+  await logTransferAttempt(transfer)
+}
+
+function handleTransferUpdated(event) {
+  const transfer = event.transfer
+  console.log(`Transferência atualizada: ${transfer.id} - Novo status: ${transfer.status}`)
+  
+  // Atualizar status em tempo real
+  await updateTransferStatus(transfer.id, transfer.status)
+}
+
+function handleTransferCanceled(event) {
+  const transfer = event.transfer
+  console.log(`Transferência cancelada: ${transfer.id}`)
+  
+  // Reverter operação e notificar
+  await revertTransfer(transfer.id)
+  await notifyTransferCanceled(transfer)
+}
+```
+
+### Tratamento de Estornos
+
+```javascript
+function handleTransactionRefunded(transaction) {
+  console.log(`Estorno processado: R$ ${transaction.refund.amount / 100}`)
+  
+  // 1. Cancelar entrega se ainda não enviada
+  await cancelDeliveryIfPending(transaction.id)
+  
+  // 2. Restaurar estoque
+  if (transaction.items) {
+    await restoreInventory(transaction.items)
+  }
+  
+  // 3. Notificar cliente
+  await sendRefundNotification(transaction.customer.email, {
+    refundAmount: transaction.refund.amount,
+    reason: transaction.refund.reason,
+    refundedAt: transaction.refund.refundedAt
+  })
+  
+  // 4. Atualizar sistemas internos
+  await updateInternalStatus(transaction.id, 'refunded')
+  
+  console.log(`Estorno ${transaction.id} processado`)
+}
+```
+
+## Implementação robusta
+
+### Processador de Eventos Centralizado
+
+```javascript
+class WebhookEventProcessor {
+  constructor() {
+    this.handlers = new Map()
+    this.setupHandlers()
+  }
+
+  setupHandlers() {
+    // Eventos de transação
+    this.handlers.set('transaction_created', this.handleTransactionCreated)
+    this.handlers.set('transaction_paid', this.handleTransactionPaid)
+    this.handlers.set('transaction_refunded', this.handleTransactionRefunded)
+    this.handlers.set('transaction_infraction', this.handleTransactionInfraction)
+    
+    // Eventos de transferência
+    this.handlers.set('transfer_created', this.handleTransferCreated)
+    this.handlers.set('transfer_completed', this.handleTransferCompleted)
+    this.handlers.set('transfer_canceled', this.handleTransferCanceled)
+    this.handlers.set('transfer_updated', this.handleTransferUpdated)
+  }
+
+  async processEvent(event) {
+    const handler = this.handlers.get(event.event)
+    
+    if (!handler) {
+      console.warn(`⚠️ Evento não tratado: ${event.event}`)
+      return
+    }
+
+    try {
+      console.log(`Processando evento: ${event.event}`)
+      
+      // Verificar se já foi processado (idempotência)
+      if (await this.isEventProcessed(event.id)) {
+        console.log(`ℹ️ Evento já processado: ${event.id}`)
+        return
+      }
+
+      // Processar evento
+      await handler.call(this, event)
+      
+      // Marcar como processado
+      await this.markEventProcessed(event.id)
+      
+      console.log(`Evento processado: ${event.event} - ${event.id}`)
+      
+    } catch (error) {
+      console.error(`❌ Erro ao processar evento ${event.event}:`, error)
+      
+      // Registrar erro para retry
+      await this.logEventError(event.id, error)
+      
+      throw error
+    }
+  }
+
+  async handleTransactionCreated(event) {
+    const transaction = event.transaction
+    
+    // Iniciar timer de expiração
+    await this.scheduleExpirationCheck(transaction.id, transaction.expiresAt)
+    
+    // Notificar sistemas internos
+    await this.notifyTransactionCreated(transaction)
+  }
+
+  async handleTransactionPaid(event) {
+    const transaction = event.transaction
+    
+    // Executar ações em paralelo quando possível
+    await Promise.all([
+      this.releaseProduct(transaction.id),
+      this.sendConfirmationEmail(transaction),
+      this.updateInventory(transaction.items),
+      this.updateAnalytics('payment_received', transaction)
+    ])
+  }
+
+  async handleTransferCreated(event) {
+    const transfer = event.transfer
+    
+    // Registrar transferência criada
+    await this.logTransferAttempt(transfer)
+    await this.notifyTransferCreated(transfer)
+  }
+
+  async handleTransferUpdated(event) {
+    const transfer = event.transfer
+    
+    // Atualizar status da transferência
+    await this.updateTransferStatus(transfer.id, transfer.status)
+  }
+
+  async handleTransferCompleted(event) {
+    const transfer = event.transfer
+    
+    await Promise.all([
+      this.updateFinancialRecord(transfer),
+      this.notifyTransferCompletion(transfer),
+      this.updateAnalytics('transfer_completed', transfer)
+    ])
+  }
+
+  async handleTransferCanceled(event) {
+    const transfer = event.transfer
+    
+    // Reverter e notificar cancelamento
+    await this.revertTransfer(transfer.id)
+    await this.notifyTransferCanceled(transfer)
+  }
+
+  // Métodos utilitários
+  async isEventProcessed(eventId) {
+    // Verificar se evento já foi processado (implementar conforme sua arquitetura)
+    return await redis.exists(`processed_event:${eventId}`)
+  }
+
+  async markEventProcessed(eventId) {
+    // Marcar evento como processado com TTL
+    await redis.setex(`processed_event:${eventId}`, 86400, 'true') // 24 horas
+  }
+
+  async logEventError(eventId, error) {
+    // Registrar erro para possível retry
+    await errorLogger.log({
+      eventId,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    })
+  }
+}
+
+// Uso no endpoint webhook
+const eventProcessor = new WebhookEventProcessor()
+
+app.post('/webhooks/quantumpay', async (req, res) => {
+  try {
+    // Verificar assinatura
+    if (!verifySignature(req.body, req.headers['quantumpay-signature'], WEBHOOK_SECRET)) {
+      return res.status(401).send('Invalid signature')
+    }
+
+    const event = JSON.parse(req.body)
+    
+    // Processar evento
+    await eventProcessor.processEvent(event)
+    
+    res.status(200).send('OK')
+  } catch (error) {
+    console.error('Webhook processing error:', error)
+    res.status(500).send('Internal server error')
+  }
+})
+```
+
+## Boas práticas
+
+### 1. Idempotência
+
+```javascript
+// Sempre verificar se evento já foi processado
+async function processEventIdempotent(event) {
+  const eventKey = `event_${event.id}`
+  
+  if (await cache.get(eventKey)) {
+    console.log('Evento já processado')
+    return
+  }
+  
+  try {
+    await processEvent(event)
+    await cache.set(eventKey, 'processed', 86400) // 24h TTL
+  } catch (error) {
+    // Não marcar como processado em caso de erro
+    throw error
+  }
+}
+```
+
+### 2. Retry e Recuperação
+
+```javascript
+async function processEventWithRetry(event, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await processEvent(event)
+      return
+    } catch (error) {
+      console.error(`Tentativa ${attempt} falhou:`, error.message)
+      
+      if (attempt === maxRetries) {
+        // Enviar para dead letter queue
+        await deadLetterQueue.send(event)
+        throw error
+      }
+      
+      // Aguardar antes de tentar novamente
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+    }
+  }
+}
+```
+
+### 3. Monitoramento
+
+```javascript
+class WebhookMonitor {
+  constructor() {
+    this.metrics = {
+      eventsReceived: 0,
+      eventsProcessed: 0,
+      eventsFailed: 0,
+      processingTimes: []
+    }
+  }
+
+  async recordEventProcessing(eventType, processingTime, success) {
+    this.metrics.eventsReceived++
+    
+    if (success) {
+      this.metrics.eventsProcessed++
+    } else {
+      this.metrics.eventsFailed++
+    }
+    
+    this.metrics.processingTimes.push(processingTime)
+    
+    // Enviar métricas para sistema de monitoramento
+    await this.sendMetrics(eventType, {
+      processingTime,
+      success,
+      timestamp: Date.now()
+    })
+  }
+
+  getStatistics() {
+    const avgProcessingTime = this.metrics.processingTimes.reduce((a, b) => a + b, 0) / this.metrics.processingTimes.length
+    
+    return {
+      eventsReceived: this.metrics.eventsReceived,
+      eventsProcessed: this.metrics.eventsProcessed,
+      eventsFailed: this.metrics.eventsFailed,
+      successRate: (this.metrics.eventsProcessed / this.metrics.eventsReceived) * 100,
+      averageProcessingTime: avgProcessingTime
+    }
+  }
+}
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="➕ Criar Webhook" icon="plus" href="/pages/webhook/create">
+    Configure webhooks para receber estes eventos
+  </Card>
+  <Card title="Verificar assinatura" icon="shield-check" href="/webhook">
+    Implemente validação de assinatura
+  </Card>
+  <Card title="Listar webhooks" icon="list" href="/pages/webhook/list">
+    Gerencie seus webhooks existentes
+  </Card>
+  <Card title="PIX IN" icon="qrcode" href="/pages/pix-in/overview">
+    Comece a receber pagamentos PIX
+  </Card>
+</CardGroup> 

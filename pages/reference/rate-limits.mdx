@@ -1,0 +1,714 @@
+---
+title: 'Rate Limits'
+icon: chart-line
+description: 'Limites de requisições da API e como gerenciá-los eficientemente'
+---
+
+Esta página explica os limites de requisições (rate limits) da API Quantum Pay e como implementar estratégias eficientes para respeitá-los.
+
+## Limites por endpoint
+
+### Tabela de Rate Limits
+
+| Endpoint | Limite | Janela de Tempo | Tipo |
+|----------|--------|-----------------|------|
+| `POST /api/auth` | 5 requests | 1 minuto | Por IP + API Key |
+| `POST /api/v1/pix/in/qrcode` | 100 requests | 1 minuto | Por API Key |
+| `POST /api/v1/pix/out/pixkey` | 50 requests | 1 minuto | Por API Key |
+| `GET /api/v1/webhook` | 30 requests | 1 minuto | Por API Key |
+| `POST /api/v1/webhook` | 10 requests | 1 minuto | Por API Key |
+| `DELETE /api/v1/webhook/:id` | 10 requests | 1 minuto | Por API Key |
+
+### Headers de Rate Limit
+
+A API retorna headers informativos sobre seus limites:
+
+```http
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 85
+X-RateLimit-Reset: 1640995260
+X-RateLimit-Window: 60
+```
+
+| Header | Descrição |
+|--------|-----------|
+| `X-RateLimit-Limit` | Limite máximo para o endpoint |
+| `X-RateLimit-Remaining` | Requisições restantes na janela atual |
+| `X-RateLimit-Reset` | Timestamp quando o limite será resetado |
+| `X-RateLimit-Window` | Tamanho da janela em segundos |
+
+## Quando o limite é excedido
+
+### Resposta HTTP 429
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "RATE_LIMIT_EXCEEDED",
+    "message": "Rate limit exceeded. Try again in 42 seconds.",
+    "details": {
+      "limit": 100,
+      "window": 60,
+      "retryAfter": 42
+    }
+  },
+  "timestamp": "2024-01-20T10:30:00.000Z"
+}
+```
+
+### Headers Adicionais
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 42
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1640995302
+```
+
+## Implementação de rate limiting
+
+### Cliente com Rate Limiting Inteligente
+
+```javascript
+class RateLimitedAPIClient {
+  constructor(apiKey, apiSecret, baseUrl) {
+    this.auth = new Quantum PayAuth(apiKey, apiSecret, baseUrl)
+    this.rateLimits = new Map()
+    this.requestQueue = new Map()
+  }
+
+  async makeRequest(method, endpoint, data = null) {
+    // Verificar se precisa aguardar
+    await this.waitIfRateLimited(endpoint)
+    
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(method, endpoint, data)
+      
+      // Atualizar informações de rate limit
+      this.updateRateLimitInfo(endpoint, response.headers)
+      
+      return response
+    } catch (error) {
+      if (error.status === 429) {
+        await this.handleRateLimit(endpoint, error)
+        // Tentar novamente após aguardar
+        return await this.makeRequest(method, endpoint, data)
+      }
+      throw error
+    }
+  }
+
+  async waitIfRateLimited(endpoint) {
+    const limitInfo = this.rateLimits.get(endpoint)
+    
+    if (!limitInfo) return
+    
+    const now = Math.floor(Date.now() / 1000)
+    
+    // Se ainda estamos na janela de rate limit e sem requests restantes
+    if (limitInfo.resetTime > now && limitInfo.remaining <= 0) {
+      const waitTime = (limitInfo.resetTime - now) * 1000
+      console.log(`Rate limit ativo para ${endpoint}. Aguardando ${waitTime}ms...`)
+      await new Promise(resolve => setTimeout(resolve, waitTime))
+    }
+  }
+
+  updateRateLimitInfo(endpoint, headers) {
+    if (headers['x-ratelimit-limit']) {
+      this.rateLimits.set(endpoint, {
+        limit: parseInt(headers['x-ratelimit-limit']),
+        remaining: parseInt(headers['x-ratelimit-remaining']),
+        resetTime: parseInt(headers['x-ratelimit-reset']),
+        window: parseInt(headers['x-ratelimit-window'])
+      })
+    }
+  }
+
+  async handleRateLimit(endpoint, error) {
+    const retryAfter = error.response?.headers['retry-after'] || 60
+    console.log(`Rate limit excedido para ${endpoint}. Aguardando ${retryAfter} segundos...`)
+    
+    // Atualizar informações de rate limit
+    this.rateLimits.set(endpoint, {
+      limit: 0,
+      remaining: 0,
+      resetTime: Math.floor(Date.now() / 1000) + parseInt(retryAfter),
+      window: parseInt(retryAfter)
+    })
+    
+    await new Promise(resolve => setTimeout(resolve, parseInt(retryAfter) * 1000))
+  }
+
+  getRateLimitStatus(endpoint) {
+    return this.rateLimits.get(endpoint) || null
+  }
+
+  getAllRateLimitStatus() {
+    const status = {}
+    for (const [endpoint, info] of this.rateLimits.entries()) {
+      const now = Math.floor(Date.now() / 1000)
+      status[endpoint] = {
+        ...info,
+        isActive: info.resetTime > now,
+        timeToReset: Math.max(0, info.resetTime - now)
+      }
+    }
+    return status
+  }
+}
+```
+
+### Sistema de Fila de Requisições
+
+```javascript
+class RequestQueue {
+  constructor(rateLimitedClient) {
+    this.client = rateLimitedClient
+    this.queues = new Map()
+    this.processing = new Map()
+  }
+
+  async enqueue(endpoint, method, data = null, priority = 'normal') {
+    if (!this.queues.has(endpoint)) {
+      this.queues.set(endpoint, [])
+    }
+
+    const request = {
+      id: this.generateRequestId(),
+      method,
+      endpoint,
+      data,
+      priority,
+      timestamp: Date.now(),
+      resolve: null,
+      reject: null
+    }
+
+    return new Promise((resolve, reject) => {
+      request.resolve = resolve
+      request.reject = reject
+      
+      const queue = this.queues.get(endpoint)
+      
+      if (priority === 'high') {
+        queue.unshift(request)
+      } else {
+        queue.push(request)
+      }
+      
+      this.processQueue(endpoint)
+    })
+  }
+
+  async processQueue(endpoint) {
+    if (this.processing.get(endpoint)) {
+      return // Já processando
+    }
+
+    this.processing.set(endpoint, true)
+
+    try {
+      const queue = this.queues.get(endpoint)
+      
+      while (queue.length > 0) {
+        const request = queue.shift()
+        
+        try {
+          const result = await this.client.makeRequest(
+            request.method,
+            request.endpoint,
+            request.data
+          )
+          request.resolve(result)
+        } catch (error) {
+          request.reject(error)
+        }
+        
+        // Pequena pausa entre requisições
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+    } finally {
+      this.processing.set(endpoint, false)
+    }
+  }
+
+  generateRequestId() {
+    return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
+
+  getQueueStatus() {
+    const status = {}
+    for (const [endpoint, queue] of this.queues.entries()) {
+      status[endpoint] = {
+        pending: queue.length,
+        processing: this.processing.get(endpoint) || false
+      }
+    }
+    return status
+  }
+}
+
+// Uso
+const client = new RateLimitedAPIClient(API_KEY, API_SECRET, BASE_URL)
+const queue = new RequestQueue(client)
+
+// Requisições com prioridade
+await queue.enqueue('/api/v1/pix/in/qrcode', 'POST', paymentData, 'high')
+await queue.enqueue('/api/v1/pix/out/pixkey', 'POST', transferData, 'normal')
+```
+
+## Otimização de performance
+
+### Batch Operations
+
+```javascript
+class BatchProcessor {
+  constructor(client, options = {}) {
+    this.client = client
+    this.batchSize = options.batchSize || 10
+    this.batchDelay = options.batchDelay || 1000
+    this.batches = new Map()
+  }
+
+  async addToBatch(endpoint, operation) {
+    if (!this.batches.has(endpoint)) {
+      this.batches.set(endpoint, [])
+      // Processar batch após delay
+      setTimeout(() => this.processBatch(endpoint), this.batchDelay)
+    }
+
+    const batch = this.batches.get(endpoint)
+    
+    return new Promise((resolve, reject) => {
+      batch.push({ operation, resolve, reject })
+      
+      // Processar se batch está cheio
+      if (batch.length >= this.batchSize) {
+        this.processBatch(endpoint)
+      }
+    })
+  }
+
+  async processBatch(endpoint) {
+    const batch = this.batches.get(endpoint)
+    if (!batch || batch.length === 0) return
+
+    this.batches.set(endpoint, []) // Limpar batch
+
+    console.log(`Processando batch de ${batch.length} operações para ${endpoint}`)
+
+    // Processar com rate limiting
+    for (const { operation, resolve, reject } of batch) {
+      try {
+        const result = await this.client.makeRequest(
+          operation.method,
+          operation.endpoint,
+          operation.data
+        )
+        resolve(result)
+      } catch (error) {
+        reject(error)
+      }
+      
+      // Pausa entre operações do batch
+      await new Promise(resolve => setTimeout(resolve, 100))
+    }
+  }
+}
+
+// Uso
+const batchProcessor = new BatchProcessor(client, {
+  batchSize: 5,
+  batchDelay: 2000
+})
+
+// Adicionar operações ao batch
+const promises = []
+for (let i = 0; i < 20; i++) {
+  promises.push(
+    batchProcessor.addToBatch('/api/v1/pix/in/qrcode', {
+      method: 'POST',
+      endpoint: '/api/v1/pix/in/qrcode',
+      data: paymentData[i]
+    })
+  )
+}
+
+const results = await Promise.all(promises)
+```
+
+### Cache Inteligente
+
+```javascript
+class CachedAPIClient {
+  constructor(client, options = {}) {
+    this.client = client
+    this.cache = new Map()
+    this.defaultTTL = options.defaultTTL || 300000 // 5 minutos
+    this.cacheable = options.cacheable || ['GET']
+  }
+
+  async makeRequest(method, endpoint, data = null, options = {}) {
+    const cacheKey = this.getCacheKey(method, endpoint, data)
+    const useCache = this.cacheable.includes(method) && !options.skipCache
+
+    // Tentar cache primeiro
+    if (useCache) {
+      const cached = this.getFromCache(cacheKey)
+      if (cached) {
+        console.log(`Cache hit para ${endpoint}`)
+        return cached
+      }
+    }
+
+    try {
+      const result = await this.client.makeRequest(method, endpoint, data)
+      
+      // Cachear resultado
+      if (useCache) {
+        this.setCache(cacheKey, result, options.ttl || this.defaultTTL)
+      }
+      
+      return result
+    } catch (error) {
+      // Em caso de rate limit, tentar cache mesmo que expirado
+      if (error.status === 429 && useCache) {
+        const stale = this.getFromCache(cacheKey, true)
+        if (stale) {
+          console.log(`Usando cache expirado devido ao rate limit para ${endpoint}`)
+          return stale
+        }
+      }
+      throw error
+    }
+  }
+
+  getCacheKey(method, endpoint, data) {
+    const dataHash = data ? this.hashObject(data) : ''
+    return `${method}:${endpoint}:${dataHash}`
+  }
+
+  getFromCache(key, allowStale = false) {
+    const item = this.cache.get(key)
+    if (!item) return null
+    
+    if (!allowStale && Date.now() > item.expiresAt) {
+      this.cache.delete(key)
+      return null
+    }
+    
+    return item.data
+  }
+
+  setCache(key, data, ttl) {
+    this.cache.set(key, {
+      data,
+      expiresAt: Date.now() + ttl,
+      createdAt: Date.now()
+    })
+  }
+
+  hashObject(obj) {
+    return require('crypto')
+      .createHash('md5')
+      .update(JSON.stringify(obj))
+      .digest('hex')
+      .substring(0, 8)
+  }
+
+  clearCache() {
+    this.cache.clear()
+  }
+
+  getCacheStats() {
+    let expired = 0
+    let active = 0
+    const now = Date.now()
+    
+    for (const [key, item] of this.cache.entries()) {
+      if (now > item.expiresAt) {
+        expired++
+      } else {
+        active++
+      }
+    }
+    
+    return { total: this.cache.size, active, expired }
+  }
+}
+```
+
+## Monitoramento de rate limits
+
+### Dashboard de Métricas
+
+```javascript
+class RateLimitMonitor {
+  constructor() {
+    this.metrics = {
+      requests: new Map(),
+      rateLimitHits: new Map(),
+      averageWaitTime: new Map()
+    }
+  }
+
+  recordRequest(endpoint, timestamp = Date.now()) {
+    if (!this.metrics.requests.has(endpoint)) {
+      this.metrics.requests.set(endpoint, [])
+    }
+    
+    this.metrics.requests.get(endpoint).push(timestamp)
+    this.cleanOldMetrics(endpoint)
+  }
+
+  recordRateLimitHit(endpoint, waitTime) {
+    if (!this.metrics.rateLimitHits.has(endpoint)) {
+      this.metrics.rateLimitHits.set(endpoint, [])
+    }
+    
+    this.metrics.rateLimitHits.get(endpoint).push({
+      timestamp: Date.now(),
+      waitTime
+    })
+    
+    this.updateAverageWaitTime(endpoint, waitTime)
+  }
+
+  updateAverageWaitTime(endpoint, waitTime) {
+    const current = this.metrics.averageWaitTime.get(endpoint) || { total: 0, count: 0 }
+    current.total += waitTime
+    current.count += 1
+    this.metrics.averageWaitTime.set(endpoint, current)
+  }
+
+  getRequestRate(endpoint, windowMs = 60000) {
+    const requests = this.metrics.requests.get(endpoint) || []
+    const cutoff = Date.now() - windowMs
+    const recentRequests = requests.filter(ts => ts > cutoff)
+    
+    return {
+      endpoint,
+      requestCount: recentRequests.length,
+      requestsPerMinute: (recentRequests.length / windowMs) * 60000,
+      rateLimitHits: this.getRateLimitHits(endpoint, windowMs)
+    }
+  }
+
+  getRateLimitHits(endpoint, windowMs = 60000) {
+    const hits = this.metrics.rateLimitHits.get(endpoint) || []
+    const cutoff = Date.now() - windowMs
+    return hits.filter(hit => hit.timestamp > cutoff).length
+  }
+
+  getAverageWaitTime(endpoint) {
+    const data = this.metrics.averageWaitTime.get(endpoint)
+    if (!data || data.count === 0) return 0
+    return data.total / data.count
+  }
+
+  cleanOldMetrics(endpoint, maxAge = 3600000) { // 1 hora
+    const cutoff = Date.now() - maxAge
+    
+    // Limpar requisições antigas
+    const requests = this.metrics.requests.get(endpoint) || []
+    this.metrics.requests.set(endpoint, requests.filter(ts => ts > cutoff))
+    
+    // Limpar rate limit hits antigos
+    const hits = this.metrics.rateLimitHits.get(endpoint) || []
+    this.metrics.rateLimitHits.set(endpoint, hits.filter(hit => hit.timestamp > cutoff))
+  }
+
+  generateReport() {
+    const report = {
+      timestamp: new Date().toISOString(),
+      endpoints: {}
+    }
+
+    for (const endpoint of this.getAllEndpoints()) {
+      const rate = this.getRequestRate(endpoint)
+      report.endpoints[endpoint] = {
+        requestsPerMinute: rate.requestsPerMinute,
+        rateLimitHits: rate.rateLimitHits,
+        averageWaitTime: this.getAverageWaitTime(endpoint),
+        efficiency: this.calculateEfficiency(endpoint)
+      }
+    }
+
+    return report
+  }
+
+  getAllEndpoints() {
+    const endpoints = new Set()
+    for (const endpoint of this.metrics.requests.keys()) {
+      endpoints.add(endpoint)
+    }
+    for (const endpoint of this.metrics.rateLimitHits.keys()) {
+      endpoints.add(endpoint)
+    }
+    return Array.from(endpoints)
+  }
+
+  calculateEfficiency(endpoint) {
+    const rate = this.getRequestRate(endpoint)
+    if (rate.requestCount === 0) return 100
+    
+    const efficiency = ((rate.requestCount - rate.rateLimitHits) / rate.requestCount) * 100
+    return Math.round(efficiency * 100) / 100
+  }
+}
+
+// Uso
+const monitor = new RateLimitMonitor()
+
+// Integrar com cliente
+const originalMakeRequest = client.makeRequest.bind(client)
+client.makeRequest = async function(method, endpoint, data) {
+  monitor.recordRequest(endpoint)
+  
+  try {
+    return await originalMakeRequest(method, endpoint, data)
+  } catch (error) {
+    if (error.status === 429) {
+      const waitTime = parseInt(error.response?.headers['retry-after'] || 60) * 1000
+      monitor.recordRateLimitHit(endpoint, waitTime)
+    }
+    throw error
+  }
+}
+
+// Gerar relatório periódico
+setInterval(() => {
+  const report = monitor.generateReport()
+  console.log('Rate Limit Report:', JSON.stringify(report, null, 2))
+}, 60000) // A cada minuto
+```
+
+## Estratégias avançadas
+
+### Distribuição de Carga
+
+```javascript
+class LoadBalancer {
+  constructor(clients) {
+    this.clients = clients
+    this.currentIndex = 0
+  }
+
+  getNextClient() {
+    // Round-robin simples
+    const client = this.clients[this.currentIndex]
+    this.currentIndex = (this.currentIndex + 1) % this.clients.length
+    return client
+  }
+
+  async makeRequest(method, endpoint, data) {
+    const errors = []
+    
+    // Tentar com cada cliente
+    for (let attempt = 0; attempt < this.clients.length; attempt++) {
+      const client = this.getNextClient()
+      
+      try {
+        return await client.makeRequest(method, endpoint, data)
+      } catch (error) {
+        errors.push(error)
+        
+        // Se não for rate limit, parar tentativas
+        if (error.status !== 429) {
+          throw error
+        }
+      }
+    }
+    
+    // Todos os clientes com rate limit
+    throw new Error('Todos os clientes estão com rate limit ativo')
+  }
+}
+
+// Uso com múltiplas API Keys
+const clients = [
+  new RateLimitedAPIClient(API_KEY_1, API_SECRET_1, BASE_URL),
+  new RateLimitedAPIClient(API_KEY_2, API_SECRET_2, BASE_URL),
+  new RateLimitedAPIClient(API_KEY_3, API_SECRET_3, BASE_URL)
+]
+
+const loadBalancer = new LoadBalancer(clients)
+```
+
+### Predição de Rate Limits
+
+```javascript
+class RateLimitPredictor {
+  constructor(monitor) {
+    this.monitor = monitor
+  }
+
+  predictRateLimitRisk(endpoint, plannedRequests) {
+    const currentRate = this.monitor.getRequestRate(endpoint)
+    const limit = this.getKnownLimit(endpoint)
+    
+    if (!limit) return { risk: 'unknown', confidence: 0 }
+    
+    const projectedRequests = currentRate.requestCount + plannedRequests
+    const utilizationRate = projectedRequests / limit
+    
+    let risk = 'low'
+    let confidence = 0.8
+    
+    if (utilizationRate > 0.9) {
+      risk = 'high'
+      confidence = 0.95
+    } else if (utilizationRate > 0.7) {
+      risk = 'medium'
+      confidence = 0.85
+    }
+    
+    return {
+      risk,
+      confidence,
+      utilizationRate,
+      recommendedDelay: this.calculateRecommendedDelay(endpoint, utilizationRate)
+    }
+  }
+
+  getKnownLimit(endpoint) {
+    const limits = {
+      '/api/auth': 5,
+      '/api/v1/pix/in/qrcode': 100,
+      '/api/v1/pix/out/pixkey': 50,
+      '/api/v1/webhook': 30
+    }
+    return limits[endpoint]
+  }
+
+  calculateRecommendedDelay(endpoint, utilizationRate) {
+    if (utilizationRate < 0.7) return 0
+    
+    const baseDelay = 1000 // 1 segundo
+    const riskMultiplier = utilizationRate > 0.9 ? 3 : 2
+    
+    return Math.round(baseDelay * riskMultiplier * utilizationRate)
+  }
+}
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Status e códigos" icon="list" href="/pages/reference/status-codes">
+    Referência completa de status e códigos
+  </Card>
+  <Card title="❌ Tratamento de Erros" icon="triangle-exclamation" href="/pages/reference/errors">
+    Guia completo para tratamento de erros
+  </Card>
+  <Card title="Segurança" icon="shield-check" href="/security">
+    Boas práticas de segurança
+  </Card>
+  <Card title="PIX IN" icon="qrcode" href="/pages/pix-in/overview">
+    Comece a receber pagamentos PIX
+  </Card>
+</CardGroup> 

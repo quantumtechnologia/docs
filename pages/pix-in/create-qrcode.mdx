@@ -1,0 +1,585 @@
+---
+title: 'Criar QR Code PIX'
+description: 'Guia completo para criar QR Codes PIX para recebimento'
+---
+
+Este guia mostra como criar QR Codes PIX para receber pagamentos de forma detalhada, com exemplos práticos e todas as opções disponíveis.
+
+## Endpoint
+
+### POST `/api/v1/pix/in/qrcode`
+
+Cria um QR Code PIX para recebimento de pagamentos instantâneos.
+
+**URL Completa:**
+- **Produção**: `https://api.quantumpay.com.br/api/v1/pix/in/qrcode`
+
+## Headers obrigatórios
+
+```http
+Content-Type: application/json
+Authorization: Bearer <seu_token_bearer>
+```
+
+## Parâmetros do corpo
+
+### Campos Obrigatórios
+
+<AccordionGroup>
+  <Accordion title="amountInCents" icon="dollar-sign">
+    **Tipo**: `number`  
+    **Descrição**: Valor em centavos (ex: 10000 = R$ 100,00)  
+    **Mínimo**: 1 centavo (R$ 0,01)  
+    **Máximo**: 1.000.000.000 centavos (R$ 10.000.000,00)
+    
+    ```json
+    {
+      "amountInCents": 29990  // R$ 299,90
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="customer" icon="user">
+    **Tipo**: `object`  
+    **Descrição**: Dados do cliente pagador
+    
+    **Campos obrigatórios do customer:**
+    - `name` (string): Nome completo
+    - `email` (string): Email válido
+    - `documentType` (string): "cpf" ou "cnpj"
+    - `document` (string): Número do documento (apenas números)
+    
+    ```json
+    {
+      "customer": {
+        "name": "Cliente Exemplo Silva",
+        "email": "cliente@exemplo.com",
+        "documentType": "cpf",
+        "document": "11122233344"
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Campos opcionais
+
+<AccordionGroup>
+  <Accordion title="description" icon="file-text">
+    **Tipo**: `string`  
+    **Descrição**: Descrição da transação  
+    **Limite**: 140 caracteres  
+    **Padrão**: Vazio
+    
+    ```json
+    {
+      "description": "Pagamento de serviços"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="postbackUrl" icon="link">
+    **Tipo**: `string`  
+    **Descrição**: URL específica para webhooks desta transação  
+    **Formato**: URL válida (https://)
+    
+    ```json
+    {
+      "postbackUrl": "https://exemplo.com.br/webhook/pix-in"
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="customer.phone" icon="phone">
+    **Tipo**: `string`  
+    **Descrição**: Telefone do cliente  
+    **Formato**: Formato com DDD e número
+    
+    ```json
+    {
+      "customer": {
+        "phone": "(11) 91234-5678"
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="customer.billingAddress" icon="map-pin">
+    **Tipo**: `object`  
+    **Descrição**: Endereço de cobrança do cliente
+    
+    ```json
+    {
+      "customer": {
+        "billingAddress": {
+          "street": "Rua Exemplo",
+          "number": "100",
+          "neighborhood": "Centro",
+          "city": "São Paulo",
+          "state": "SP",
+          "zipCode": "00000000"
+        }
+      }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="items" icon="shopping-cart">
+    **Tipo**: `array`  
+    **Descrição**: Lista de itens da compra
+    
+    ```json
+    {
+      "items": [
+        {
+          "title": "Produto Exemplo",
+          "tangible": true,
+          "quantity": 2,
+          "amountInCents": 2500
+        }
+      ]
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Exemplos práticos
+
+### Exemplo Básico - Cobrança Simples
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/in/qrcode' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "amountInCents": 5000,
+    "description": "Pagamento de serviços",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-in",
+    "customer": {
+      "name": "Cliente Exemplo",
+      "email": "cliente@exemplo.com",
+      "document": "11122233344",
+      "documentType": "cpf",
+      "phone": "(11) 91234-5678"
+    }
+  }'
+```
+
+### Exemplo Completo - E-commerce
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/in/qrcode' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "amountInCents": 25000,
+    "description": "Compra na loja online - Pedido #EXEMPLO",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-in",
+    "customer": {
+      "name": "Cliente Exemplo Silva",
+      "email": "cliente@exemplo.com",
+      "document": "11122233344",
+      "documentType": "cpf",
+      "phone": "(11) 91234-5678"
+    },
+    "items": [
+      {
+        "title": "Produto Exemplo A",
+        "tangible": true,
+        "quantity": 2,
+        "amountInCents": 10000
+      },
+      {
+        "title": "Frete Padrão",
+        "tangible": false,
+        "quantity": 1,
+        "amountInCents": 5000
+      }
+    ],
+    "billingAddress": {
+      "street": "Rua Exemplo, 100",
+      "city": "São Paulo",
+      "state": "SP",
+      "zipCode": "00000-000"
+    }
+  }'
+```
+
+### Exemplo B2B - CNPJ
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/in/qrcode' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "amountInCents": 50000,
+    "description": "Prestação de serviços - NF Exemplo",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-in",
+    "customer": {
+      "name": "Empresa Exemplo Ltda",
+      "email": "financeiro@exemplo.com",
+      "document": "11222333000144",
+      "documentType": "cnpj",
+      "phone": "(11) 3000-0000"
+    }
+  }'
+```
+
+## Resposta de sucesso (200)
+
+```json
+{
+  "success": true,
+  "message": "Transação criada com sucesso",
+  "data": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "pix": {
+      "emv": "00020126...SEU_CODIGO_EMV_AQUI...6304ABCD",
+      "qrCode": "[BASE64_ENCODED_QRCODE_IMAGE]"
+    },
+    "status": "pending",
+    "fees": 0
+  }
+}
+```
+
+### Campos da Resposta
+
+| Campo | Descrição |
+|-------|-----------|
+| `id` | ID único da transação |
+| `pix.emv` | Código PIX para copiar e colar |
+| `pix.qrCode` | Imagem do QR Code em Base64 |
+| `status` | Status atual (`pending` - aguardando pagamento) |
+| `fees` | Taxa cobrada em centavos |
+
+## Exibindo o QR Code
+
+### Exibir Imagem
+
+```html
+<div class="pix-payment">
+  <h3>Pague com PIX</h3>
+  <img src="[BASE64_ENCODED_QRCODE_IMAGE]" 
+       alt="QR Code PIX" 
+       style="width: 300px; height: 300px;">
+  
+  <p>Escaneie o QR Code com seu app bancário</p>
+</div>
+```
+
+### Código para Copiar
+
+```html
+<div class="pix-code">
+  <p>Ou copie e cole o código PIX:</p>
+  <div class="code-container">
+    <input type="text" 
+           id="pix-code" 
+           value="00020126...SEU_CODIGO_EMV_AQUI...6304ABCD" 
+           readonly>
+    <button onclick="copiarCodigo()">Copiar</button>
+  </div>
+</div>
+
+<script>
+function copiarCodigo() {
+  const codigo = document.getElementById('pix-code');
+  codigo.select();
+  document.execCommand('copy');
+  alert('Código PIX copiado!');
+}
+</script>
+```
+
+## Implementações por linguagem
+
+### JavaScript/Node.js
+
+```javascript
+class PixPayment {
+  constructor(apiKey, apiSecret, baseUrl) {
+    this.auth = new Quantum Pay(apiKey, apiSecret, baseUrl)
+  }
+
+  async createQRCode(paymentData) {
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(
+        'POST', 
+        '/api/v1/pix/in/qrcode', 
+        paymentData
+      )
+      
+      return response.data.data
+    } catch (error) {
+      throw new Error(`Erro ao criar QR Code: ${error.message}`)
+    }
+  }
+
+  async createSimplePayment(amount, customerData, description = '') {
+    const paymentData = {
+      amountInCents: amount,
+      description,
+      customer: customerData
+    }
+
+    return await this.createQRCode(paymentData)
+  }
+}
+
+// Uso
+const pixPayment = new PixPayment(API_KEY, API_SECRET, BASE_URL)
+
+const transaction = await pixPayment.createSimplePayment(
+  5000, // R$ 50,00
+  {
+    name: "Cliente Exemplo",
+    email: "cliente@exemplo.com",
+    documentType: "cpf",
+    document: "11122233344"
+  },
+  "Pagamento de produto"
+)
+
+console.log('QR Code criado:', transaction.id)
+```
+
+### Python
+
+```python
+import requests
+import json
+
+class PixPayment:
+    def __init__(self, auth_instance):
+        self.auth = auth_instance
+
+    def create_qr_code(self, payment_data):
+        response = self.auth.make_authenticated_request(
+            'POST', 
+            '/api/v1/pix/in/qrcode', 
+            payment_data
+        )
+        
+        if response.status_code == 200:
+            return response.json()['data']
+        else:
+            raise Exception(f"Erro ao criar QR Code: {response.text}")
+
+    def create_simple_payment(self, amount, customer_data, description=''):
+        payment_data = {
+            'amountInCents': amount,
+            'description': description,
+            'customer': customer_data
+        }
+        
+        return self.create_qr_code(payment_data)
+
+# Uso
+pix_payment = PixPayment(auth_instance)
+
+transaction = pix_payment.create_simple_payment(
+    5000,  # R$ 50,00
+    {
+        'name': 'Cliente Exemplo',
+        'email': 'cliente@exemplo.com',
+        'documentType': 'cpf',
+        'document': '11122233344'
+    },
+    'Pagamento de produto'
+)
+
+print(f'QR Code criado: {transaction["id"]}')
+```
+
+### PHP
+
+```php
+<?php
+
+class PixPayment {
+    private $auth;
+
+    public function __construct($authInstance) {
+        $this->auth = $authInstance;
+    }
+
+    public function createQRCode($paymentData) {
+        $response = $this->auth->makeAuthenticatedRequest(
+            'POST', 
+            '/api/v1/pix/in/qrcode', 
+            $paymentData
+        );
+        
+        $data = json_decode($response, true);
+        
+        if ($data['success']) {
+            return $data['data'];
+        } else {
+            throw new Exception("Erro ao criar QR Code: " . $response);
+        }
+    }
+
+    public function createSimplePayment($amount, $customerData, $description = '') {
+        $paymentData = [
+            'amountInCents' => $amount,
+            'description' => $description,
+            'customer' => $customerData
+        ];
+        
+        return $this->createQRCode($paymentData);
+    }
+}
+
+// Uso
+$pixPayment = new PixPayment($authInstance);
+
+$transaction = $pixPayment->createSimplePayment(
+    5000, // R$ 50,00
+    [
+        'name' => 'Cliente Exemplo',
+        'email' => 'cliente@exemplo.com',
+        'documentType' => 'cpf',
+        'document' => '11122233344'
+    ],
+    'Pagamento de produto'
+);
+
+echo "QR Code criado: " . $transaction['id'] . "\n";
+?>
+```
+
+## ❌ Tratamento de Erros
+
+### Possíveis Erros
+
+| Código | Erro | Causa Comum | Solução |
+|--------|------|-------------|---------|
+| `400` | Dados inválidos | CPF/CNPJ inválido, email malformado | Validar dados antes de enviar |
+| `401` | Token inválido | Token expirado ou inválido | Renovar token de autenticação |
+| `422` | Regra de negócio | Valor muito baixo/alto | Verificar limites permitidos |
+| `429` | Rate limit | Muitas requisições | Implementar retry com delay |
+
+### Exemplo de Tratamento
+
+```javascript
+async function criarQRCodeComTratamento(dadosPagamento) {
+  try {
+    return await pixPayment.createQRCode(dadosPagamento)
+  } catch (error) {
+    if (error.status === 400) {
+      // Validar e corrigir dados
+      console.error('Dados inválidos:', error.response.data.error)
+      throw new Error('Verifique os dados do cliente')
+    } else if (error.status === 401) {
+      // Renovar token
+      await auth.renewToken()
+      return await pixPayment.createQRCode(dadosPagamento)
+    } else if (error.status === 429) {
+      // Rate limit - aguardar
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      return await pixPayment.createQRCode(dadosPagamento)
+    } else {
+      throw error
+    }
+  }
+}
+```
+
+## Validações recomendadas
+
+### Validação de CPF
+
+```javascript
+function validarCPF(cpf) {
+  cpf = cpf.replace(/[^\d]/g, '')
+  
+  if (cpf.length !== 11) return false
+  
+  // Verificar se todos os dígitos são iguais
+  if (/^(\d)\1{10}$/.test(cpf)) return false
+  
+  // Algoritmo de validação do CPF
+  let soma = 0
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(cpf.charAt(i)) * (10 - i)
+  }
+  
+  let resto = 11 - (soma % 11)
+  if (resto === 10 || resto === 11) resto = 0
+  if (resto !== parseInt(cpf.charAt(9))) return false
+  
+  soma = 0
+  for (let i = 0; i < 10; i++) {
+    soma += parseInt(cpf.charAt(i)) * (11 - i)
+  }
+  
+  resto = 11 - (soma % 11)
+  if (resto === 10 || resto === 11) resto = 0
+  if (resto !== parseInt(cpf.charAt(10))) return false
+  
+  return true
+}
+```
+
+### Validação de CNPJ
+
+```javascript
+function validarCNPJ(cnpj) {
+  cnpj = cnpj.replace(/[^\d]/g, '')
+  
+  if (cnpj.length !== 14) return false
+  
+  // Verificar se todos os dígitos são iguais
+  if (/^(\d)\1{13}$/.test(cnpj)) return false
+  
+  // Algoritmo de validação do CNPJ
+  let tamanho = cnpj.length - 2
+  let numeros = cnpj.substring(0, tamanho)
+  let digitos = cnpj.substring(tamanho)
+  let soma = 0
+  let pos = tamanho - 7
+  
+  for (let i = tamanho; i >= 1; i--) {
+    soma += numeros.charAt(tamanho - i) * pos--
+    if (pos < 2) pos = 9
+  }
+  
+  let resultado = soma % 11 < 2 ? 0 : 11 - soma % 11
+  if (resultado !== parseInt(digitos.charAt(0))) return false
+  
+  tamanho = tamanho + 1
+  numeros = cnpj.substring(0, tamanho)
+  soma = 0
+  pos = tamanho - 7
+  
+  for (let i = tamanho; i >= 1; i--) {
+    soma += numeros.charAt(tamanho - i) * pos--
+    if (pos < 2) pos = 9
+  }
+  
+  resultado = soma % 11 < 2 ? 0 : 11 - soma % 11
+  if (resultado !== parseInt(digitos.charAt(1))) return false
+  
+  return true
+}
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Configurar webhooks" icon="webhook" href="/webhook">
+    Configure notificações automáticas de pagamento
+  </Card>
+  <Card title="PIX OUT" icon="bolt" href="/pages/pix-out/overview">
+    Aprenda a enviar transferências PIX
+  </Card>
+  <Card title="Status e códigos" icon="list" href="/pages/reference/status-codes">
+    Entenda os status e códigos de erro
+  </Card>
+  <Card title="Segurança" icon="shield-check" href="/security">
+    Boas práticas de segurança
+  </Card>
+</CardGroup> 

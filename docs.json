@@ -1,122 +1,96 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "theme": "sequoia",
+  "name": "Quantum Pay",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#FD5D20",
+    "dark": "#FFFFFF"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "/logo/logoIcon.svg",
+  "api": {
+    "mdx": {
+      "server": "https://api.quantumpay.com.br",
+      "auth": {
+        "method": "bearer"
+      }
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentação",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Introdução",
             "pages": [
               "index",
-              "quickstart",
-              "development"
+              "security"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Autenticação",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "pages/auth/getting-started",
+              "pages/auth/generate-token"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Empresa",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "pages/company/get-details"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "PIX IN - Recebimento",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "pages/pix-in/overview",
+              "pages/pix-in/create-qrcode"
+            ]
+          },
+          {
+            "group": "PIX OUT - Envio",
+            "pages": [
+              "pages/pix-out/overview",
+              "pages/pix-out/send-pixkey"
+            ]
+          },
+          {
+            "group": "Webhooks",
+            "pages": [
+              "webhook",
+              "pages/webhook/list",
+              "pages/webhook/create",
+              "pages/webhook/delete",
+              "pages/webhook/events"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
-        "groups": [
-          {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
-          }
-        ]
+        "tab": "Referência da API",
+        "openapi": "openapi.yaml"
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
+    ]
   },
   "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
+    "light": "/logo/logo.svg",
+    "dark": "/logo/logo.svg",
+    "size": 250
   },
   "navbar": {
     "links": [
       {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
+        "label": "Suporte",
+        "href": "mailto:contato@quantumpay.com.br"
       }
     ],
     "primary": {
       "type": "button",
       "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "href": "https://app.quantumpay.com.br"
     }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
   },
   "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    "socials": {}
   }
 }

@@ -1,0 +1,472 @@
+---
+title: 'PIX OUT - Envio de Transferências'
+description: 'Envie transferências PIX programaticamente para qualquer chave PIX'
+---
+
+O PIX OUT permite enviar transferências instantâneas para qualquer chave PIX de forma programática. Ideal para pagamentos a fornecedores, transferências para afiliados, estornos e qualquer situação onde você precisa enviar dinheiro.
+
+## Como funciona
+
+O PIX OUT funciona através do envio direto para chaves PIX, sem necessidade de dados bancários complexos:
+
+<CardGroup cols={2}>
+  <Card title="Chave PIX" icon="key">
+    Use qualquer tipo de chave: CPF, CNPJ, email, telefone ou aleatória
+  </Card>
+  <Card title="Transferência instantânea" icon="bolt">
+    Dinheiro é transferido instantaneamente, 24/7
+  </Card>
+  <Card title="Segurança" icon="shield-check">
+    Validação automática de chaves e dados
+  </Card>
+  <Card title="Confirmação por webhook" icon="check-circle">
+    Receba confirmação via webhook em tempo real
+  </Card>
+</CardGroup>
+
+## Implementação rápida
+
+### 1. Enviar Transferência PIX
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/out/pixkey' \
+  --header 'Content-Type: application/json' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'x-idempotency-key: idempotency_exemplo_001' \
+  --data '{
+    "pixKey": "fornecedor@exemplo.com",
+    "amount": 20000,
+    "currency": "BRL",
+    "description": "Transfer PIX Exemplo",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-out"
+  }'
+```
+
+### 2. Resposta de sucesso
+
+```json
+{
+  "success": true,
+  "message": "Transferência criada com sucesso",
+  "data": {
+    "id": "transfer_abc123def456",
+    "status": "queued",
+    "amount": 20000,
+    "netAmount": 20000,
+    "fees": 0,
+    "pixKey": "fornecedor@exemplo.com"
+  }
+}
+```
+
+### 3. Confirmação via Webhook
+
+```json
+{
+  "id": "transfer_abc123def456",
+  "type": "transfer",
+  "event": "transfer_completed",
+  "scope": "postback",
+  "transfer": {
+    "id": "transfer_abc123def456",
+    "amount": 20000,
+    "status": "completed",
+    "pix": {
+      "endToEndId": "E00000000202401011200000000000000",
+      "creditorAccount": null
+    }
+  }
+}
+```
+
+## Tipos de chave PIX suportados
+
+### CPF e CNPJ
+
+```bash
+# CPF (apenas números)
+"pixKey": "11122233344"
+
+# CNPJ (apenas números)  
+"pixKey": "11222333000144"
+```
+
+### Email
+
+```bash
+# Email válido
+"pixKey": "pagamentos@empresa.com.br"
+"pixKey": "joao.silva@gmail.com"
+```
+
+### Telefone
+
+```bash
+# Formato: +5511999999999
+"pixKey": "+5511987654321"
+"pixKey": "+5521988888888"
+```
+
+### Chave Aleatória (EVP)
+
+```bash
+# UUID gerado pelo banco
+"pixKey": "123e4567-e89b-12d3-a456-426614174000"
+"pixKey": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+```
+
+## Parâmetros detalhados
+
+### Campos Obrigatórios
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `pixKey` | `string` | Chave PIX de destino |
+| `amount` | `number` | Valor em centavos |
+
+### Campos Opcionais
+
+| Campo | Tipo | Descrição | Padrão |
+|-------|------|-----------|---------|
+| `currency` | `string` | Moeda da transferência | `"BRL"` |
+| `description` | `string` | Descrição da transferência (máx. 140 chars) | `""` |
+| `postbackUrl` | `string` | URL para receber notificações de status | `""` |
+
+### Headers Importantes
+
+| Header | Obrigatório | Descrição |
+|--------|-------------|-----------|
+| `Authorization` | Sim | Token Bearer |
+| `Content-Type` | Sim | `application/json` |
+| `x-idempotency-key` | Recomendado | Chave única para evitar duplicação |
+
+<Warning>
+  **Importante**: Use sempre o header `x-idempotency-key` para evitar transferências duplicadas acidentais.
+</Warning>
+
+## Taxas e limites
+
+### Estrutura de Taxas
+
+- **Taxa por transferência**: R$ 3,00
+- **Sem taxa mínima**: Transferências a partir de R$ 0,01
+- **Sem mensalidade**: Pague apenas pelo que usar
+
+### Limites Operacionais
+
+| Período | Limite Individual | Limite Diário |
+|---------|------------------|---------------|
+| **Por transferência** | R$ 10.000.000,00 | - |
+| **Por dia** | - | R$ 50.000.000,00 |
+| **Quantidade/dia** | - | 1.000 transferências |
+
+<Info>
+  Limites podem ser aumentados mediante análise e aprovação. Entre em contato com nosso suporte comercial.
+</Info>
+
+## Status das transferências
+
+| Status | Descrição | Tempo Esperado | Próximo Passo |
+|--------|-----------|----------------|---------------|
+| `queued` | Transferência em fila para processamento | Imediato | Aguardar processamento |
+| `processing` | Em processamento pelo sistema | 1-3 segundos | Aguardar conclusão |
+| `completed` | Transferência concluída | 3-10 segundos | Transferência realizada |
+| `canceled` | Cancelada pelo sistema | Imediato | Verificar motivo |
+
+## Fluxo de implementação
+
+### 1. Validar Dados
+
+```javascript
+function validarTransferencia(pixKey, amount, description) {
+  // Validar valor mínimo
+  if (amount < 1) {
+    throw new Error('Valor mínimo é R$ 0,01')
+  }
+  
+  // Validar valor máximo
+  if (amount > 1000000000) {
+    throw new Error('Valor máximo é R$ 10.000.000,00')
+  }
+  
+  // Validar chave PIX
+  if (!pixKey || pixKey.trim().length === 0) {
+    throw new Error('Chave PIX é obrigatória')
+  }
+  
+  // Validar descrição
+  if (description && description.length > 140) {
+    throw new Error('Descrição deve ter no máximo 140 caracteres')
+  }
+  
+  return true
+}
+```
+
+### 2. Gerar Chave de Idempotência
+
+```javascript
+function gerarIdempotencyKey(dados) {
+  // Usar dados únicos da transferência
+  const uniqueString = `${dados.pixKey}_${dados.amount}_${Date.now()}`
+  
+  // Ou usar UUID
+  const uuid = require('uuid')
+  return `transfer_${uuid.v4()}`
+  
+  // Ou usar referência interna
+  return `transfer_${dados.referenceId}_${new Date().toISOString().split('T')[0]}`
+}
+```
+
+### 3. Enviar Transferência
+
+```javascript
+async function enviarTransferencia(dadosTransferencia) {
+  const idempotencyKey = gerarIdempotencyKey(dadosTransferencia)
+  
+  try {
+    const response = await fetch('/api/v1/pix/out/pixkey', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        'X-Idempotency-Key': idempotencyKey
+      },
+      body: JSON.stringify(dadosTransferencia)
+    })
+
+    const result = await response.json()
+    
+    if (result.success) {
+      return result.data
+    } else {
+      throw new Error(result.error.message)
+    }
+  } catch (error) {
+    console.error('Erro na transferência:', error)
+    throw error
+  }
+}
+```
+
+### 4. Acompanhar Status
+
+```javascript
+async function acompanharTransferencia(transferId) {
+  const maxTentativas = 20 // 1 minuto total
+  let tentativas = 0
+  
+  return new Promise((resolve, reject) => {
+    const interval = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/v1/transfers/${transferId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        const data = await response.json()
+        
+        if (data.status === 'completed') {
+          clearInterval(interval)
+          resolve(data)
+        } else if (data.status === 'refused' || data.status === 'canceled') {
+          clearInterval(interval)
+          reject(new Error(`Transferência ${data.status}: ${data.reason}`))
+        } else if (tentativas >= maxTentativas) {
+          clearInterval(interval)
+          reject(new Error('Timeout: transferência não foi concluída'))
+        }
+        
+        tentativas++
+      } catch (error) {
+        clearInterval(interval)
+        reject(error)
+      }
+    }, 3000) // Verifica a cada 3 segundos
+  })
+}
+```
+
+## Segurança e boas práticas
+
+### Validação de Chaves PIX
+
+```javascript
+function validarChavePIX(chave) {
+  // Remover espaços e caracteres especiais
+  chave = chave.trim()
+  
+  // CPF (11 dígitos)
+  if (/^\d{11}$/.test(chave)) {
+    return validarCPF(chave)
+  }
+  
+  // CNPJ (14 dígitos)
+  if (/^\d{14}$/.test(chave)) {
+    return validarCNPJ(chave)
+  }
+  
+  // Email
+  if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(chave)) {
+    return true
+  }
+  
+  // Telefone (+5511999999999)
+  if (/^\+55\d{10,11}$/.test(chave)) {
+    return true
+  }
+  
+  // Chave aleatória (UUID)
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(chave)) {
+    return true
+  }
+  
+  return false
+}
+```
+
+### Controle de Concorrência
+
+```javascript
+// Cache para evitar transferências duplicadas
+const transferenciasEmAndamento = new Map()
+
+async function enviarComControle(dados) {
+  const chaveControle = `${dados.pixKey}_${dados.amount}`
+  
+  if (transferenciasEmAndamento.has(chaveControle)) {
+    throw new Error('Transferência similar já em andamento')
+  }
+  
+  try {
+    transferenciasEmAndamento.set(chaveControle, true)
+    const resultado = await enviarTransferencia(dados)
+    return resultado
+  } finally {
+    transferenciasEmAndamento.delete(chaveControle)
+  }
+}
+```
+
+### Auditoria e Logs
+
+```javascript
+function logarTransferencia(transferencia, status, detalhes = {}) {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    transferId: transferencia.id,
+    pixKey: transferencia.pixKey,
+    amount: transferencia.amount,
+    status: status,
+    userId: transferencia.userId,
+    ...detalhes
+  }
+  
+  // Salvar no sistema de auditoria
+  console.log('Transfer Log:', JSON.stringify(logEntry))
+  
+  // Enviar para sistema de monitoramento
+  if (status === 'refused' || status === 'canceled') {
+    alertSystem.notify('transfer_failed', logEntry)
+  }
+}
+```
+
+## Tratamento de erros
+
+### Códigos de Erro Comuns
+
+| Código | Erro | Causa | Solução |
+|--------|------|-------|---------|
+| `400` | Chave PIX inválida | Formato incorreto | Validar formato da chave |
+| `402` | Saldo insuficiente | Não há saldo na conta | Verificar saldo disponível |
+| `422` | Valor inválido | Fora dos limites | Verificar limites operacionais |
+| `429` | Rate limit | Muitas requisições | Implementar retry com delay |
+
+### Exemplo de Tratamento
+
+```javascript
+async function enviarComTratamento(dados) {
+  try {
+    return await enviarTransferencia(dados)
+  } catch (error) {
+    switch (error.status) {
+      case 400:
+        throw new Error('Verifique os dados da transferência')
+      case 402:
+        throw new Error('Saldo insuficiente para realizar a transferência')
+      case 422:
+        throw new Error('Valor fora dos limites permitidos')
+      case 429:
+        // Aguardar e tentar novamente
+        await new Promise(resolve => setTimeout(resolve, 1000))
+        return await enviarTransferencia(dados)
+      default:
+        throw new Error('Erro interno. Tente novamente em alguns minutos.')
+    }
+  }
+}
+```
+
+## Casos de uso comuns
+
+### Pagamento a Fornecedores
+
+```javascript
+async function pagarFornecedor(fornecedor, valorNota, numeroNF) {
+  const transferencia = {
+    pixKey: fornecedor.chavePix,
+    amount: valorNota,
+    description: `Pagamento NF ${numeroNF} - ${fornecedor.nome}`
+  }
+  
+  return await enviarTransferencia(transferencia)
+}
+```
+
+### Transferência para Afiliados
+
+```javascript
+async function pagarAfiliado(afiliado, comissao, periodo) {
+  const transferencia = {
+    pixKey: afiliado.chavePix,
+    amount: comissao,
+    description: `Comissão ${periodo} - Afiliado ${afiliado.id}`
+  }
+  
+  return await enviarTransferencia(transferencia)
+}
+```
+
+### Estorno para Cliente
+
+```javascript
+async function estornarCliente(cliente, valorEstorno, motivo) {
+  const transferencia = {
+    pixKey: cliente.chavePix,
+    amount: valorEstorno,
+    description: `Estorno: ${motivo}`
+  }
+  
+  return await enviarTransferencia(transferencia)
+}
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Enviar PIX" icon="bolt" href="/pages/pix-out/send-pixkey">
+    Guia detalhado para enviar transferências PIX
+  </Card>
+  <Card title="Configurar webhooks" icon="webhook" href="/webhook">
+    Configure notificações de transferências
+  </Card>
+  <Card title="PIX IN" icon="qrcode" href="/pages/pix-in/overview">
+    Aprenda a receber pagamentos PIX
+  </Card>
+  <Card title="Monitoramento" icon="chart-line" href="/pages/reference/status-codes">
+    Monitore suas transferências
+  </Card>
+</CardGroup> 

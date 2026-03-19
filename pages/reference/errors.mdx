@@ -1,0 +1,602 @@
+---
+title: 'Tratamento de Erros'
+icon: triangle-exclamation
+description: 'Guia completo para identificar, tratar e resolver erros da API'
+---
+
+Esta página fornece um guia completo para identificar, tratar e resolver erros que podem ocorrer ao integrar com a API Quantum Pay.
+
+## Estratégias de tratamento
+
+### 1. Classificação por Severidade
+
+<AccordionGroup>
+  <Accordion title="Críticos - intervenção imediata" icon="circle-exclamation">
+    **Exemplos:** Falhas de autenticação, saldo insuficiente, chave PIX inválida
+    
+    **Ação:** Parar operação, notificar usuário, registrar para análise
+    
+    ```javascript
+    if (error.code === 'AUTH_003' || error.code === 'PIX_OUT_001') {
+      // Parar tudo e notificar
+      await notifyAdmin(`Erro crítico: ${error.message}`)
+      throw new CriticalError(error.message)
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Recuperáveis - retry automático" icon="circle-half-stroke">
+    **Exemplos:** Rate limit, timeouts, erros temporários de rede
+    
+    **Ação:** Implementar retry com backoff exponencial
+    
+    ```javascript
+    if (error.status === 429 || error.status >= 500) {
+      return await retryWithBackoff(operation, attempt + 1)
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Informativos - logs e métricas" icon="circle-info">
+    **Exemplos:** Validações de formato, limites de negócio
+    
+    **Ação:** Registrar para análise, orientar usuário
+    
+    ```javascript
+    if (error.code.startsWith('PIX_IN_')) {
+      logger.info(`Validação falhou: ${error.message}`)
+      return { success: false, userMessage: error.message }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Implementação robusta
+
+### Interceptador de Erros Universal
+
+```javascript
+class Quantum PayErrorHandler {
+  constructor(options = {}) {
+    this.maxRetries = options.maxRetries || 3
+    this.retryDelay = options.retryDelay || 1000
+    this.logger = options.logger || console
+    this.alerting = options.alerting || null
+  }
+
+  async handleError(error, context = {}) {
+    const errorInfo = this.analyzeError(error)
+    
+    // Log estruturado
+    await this.logError(errorInfo, context)
+    
+    // Decidir estratégia
+    switch (errorInfo.severity) {
+      case 'critical':
+        return await this.handleCriticalError(errorInfo, context)
+      case 'recoverable':
+        return await this.handleRecoverableError(errorInfo, context)
+      case 'validation':
+        return await this.handleValidationError(errorInfo, context)
+      default:
+        return await this.handleUnknownError(errorInfo, context)
+    }
+  }
+
+  analyzeError(error) {
+    const status = error.status || error.response?.status
+    const code = error.response?.data?.error?.code
+    const message = error.response?.data?.error?.message || error.message
+
+    return {
+      status,
+      code,
+      message,
+      severity: this.classifyError(status, code),
+      timestamp: new Date().toISOString(),
+      requestId: error.response?.data?.requestId
+    }
+  }
+
+  classifyError(status, code) {
+    // Erros críticos
+    if (code?.startsWith('AUTH_') || 
+        code === 'PIX_OUT_001' || 
+        status === 403) {
+      return 'critical'
+    }
+
+    // Erros recuperáveis
+    if (status === 429 || 
+        status >= 500 || 
+        code?.includes('TIMEOUT')) {
+      return 'recoverable'
+    }
+
+    // Erros de validação
+    if (status === 400 || 
+        status === 422 || 
+        code?.startsWith('PIX_IN_')) {
+      return 'validation'
+    }
+
+    return 'unknown'
+  }
+
+  async handleCriticalError(errorInfo, context) {
+    // Alertar administradores
+    if (this.alerting) {
+      await this.alerting.sendCritical({
+        error: errorInfo,
+        context,
+        action: 'immediate_intervention_required'
+      })
+    }
+
+    // Não tentar novamente
+    throw new CriticalAPIError(errorInfo.message, errorInfo)
+  }
+
+  async handleRecoverableError(errorInfo, context) {
+    const { attempt = 1 } = context
+
+    if (attempt > this.maxRetries) {
+      // Esgotar tentativas
+      throw new MaxRetriesExceededError(
+        `Falha após ${this.maxRetries} tentativas: ${errorInfo.message}`,
+        errorInfo
+      )
+    }
+
+    // Calcular delay (backoff exponencial)
+    const delay = this.retryDelay * Math.pow(2, attempt - 1)
+    
+    this.logger.warn(`Tentativa ${attempt} falhou, aguardando ${delay}ms...`)
+    
+    await new Promise(resolve => setTimeout(resolve, delay))
+    
+    return { shouldRetry: true, delay }
+  }
+
+  async handleValidationError(errorInfo, context) {
+    // Orientar usuário sobre correção
+    const userMessage = this.getUserFriendlyMessage(errorInfo.code)
+    
+    return {
+      success: false,
+      error: {
+        type: 'validation',
+        message: userMessage,
+        field: errorInfo.field,
+        code: errorInfo.code
+      }
+    }
+  }
+
+  getUserFriendlyMessage(code) {
+    const messages = {
+      'PIX_IN_001': 'O valor deve estar entre R$ 0,01 e R$ 10.000.000,00',
+      'PIX_IN_002': 'CPF ou CNPJ inválido. Verifique os números digitados.',
+      'PIX_IN_003': 'Email inválido. Verifique o formato do email.',
+      'PIX_OUT_002': 'Chave PIX inválida. Verifique o formato da chave.',
+      'PIX_OUT_003': 'Limite diário de transferências atingido.',
+      'PIX_OUT_004': 'Chave PIX não encontrada. Verifique se está correta.',
+      'WEBHOOK_001': 'URL do webhook inválida. Use HTTPS.',
+      'WEBHOOK_002': 'Não foi possível acessar a URL do webhook.'
+    }
+
+    return messages[code] || 'Erro de validação. Verifique os dados enviados.'
+  }
+
+  async logError(errorInfo, context) {
+    const logEntry = {
+      timestamp: errorInfo.timestamp,
+      level: errorInfo.severity === 'critical' ? 'error' : 'warn',
+      error: {
+        status: errorInfo.status,
+        code: errorInfo.code,
+        message: errorInfo.message,
+        requestId: errorInfo.requestId
+      },
+      context: {
+        endpoint: context.endpoint,
+        method: context.method,
+        userId: context.userId,
+        attempt: context.attempt
+      }
+    }
+
+    this.logger.log(logEntry)
+
+    // Enviar para sistema de monitoramento
+    if (this.monitoring) {
+      await this.monitoring.recordError(logEntry)
+    }
+  }
+}
+```
+
+### Uso com Retry Automático
+
+```javascript
+class APIClient {
+  constructor() {
+    this.errorHandler = new Quantum PayErrorHandler({
+      maxRetries: 3,
+      retryDelay: 1000,
+      logger: logger,
+      alerting: alertingService
+    })
+  }
+
+  async makeRequest(method, endpoint, data = null, context = {}) {
+    const requestContext = {
+      ...context,
+      endpoint,
+      method,
+      attempt: 1
+    }
+
+    return await this.executeWithRetry(async () => {
+      try {
+        return await this.httpClient.request({
+          method,
+          url: endpoint,
+          data,
+          headers: await this.getHeaders()
+        })
+      } catch (error) {
+        throw error
+      }
+    }, requestContext)
+  }
+
+  async executeWithRetry(operation, context) {
+    let lastError
+
+    for (let attempt = 1; attempt <= this.errorHandler.maxRetries; attempt++) {
+      try {
+        context.attempt = attempt
+        return await operation()
+      } catch (error) {
+        lastError = error
+        
+        const result = await this.errorHandler.handleError(error, context)
+        
+        if (!result.shouldRetry) {
+          throw error
+        }
+
+        // Aguardar antes da próxima tentativa
+        if (result.delay) {
+          await new Promise(resolve => setTimeout(resolve, result.delay))
+        }
+      }
+    }
+
+    throw lastError
+  }
+}
+```
+
+## Monitoramento e alertas
+
+### Sistema de Métricas
+
+```javascript
+class ErrorMetrics {
+  constructor() {
+    this.metrics = {
+      totalErrors: 0,
+      errorsByCode: new Map(),
+      errorsByEndpoint: new Map(),
+      errorsByTimeframe: new Map()
+    }
+  }
+
+  recordError(errorInfo, context) {
+    this.metrics.totalErrors++
+    
+    // Por código
+    const codeCount = this.metrics.errorsByCode.get(errorInfo.code) || 0
+    this.metrics.errorsByCode.set(errorInfo.code, codeCount + 1)
+    
+    // Por endpoint
+    const endpointCount = this.metrics.errorsByEndpoint.get(context.endpoint) || 0
+    this.metrics.errorsByEndpoint.set(context.endpoint, endpointCount + 1)
+    
+    // Por timeframe (última hora)
+    const hour = Math.floor(Date.now() / (1000 * 60 * 60))
+    const hourCount = this.metrics.errorsByTimeframe.get(hour) || 0
+    this.metrics.errorsByTimeframe.set(hour, hourCount + 1)
+  }
+
+  getErrorRate(endpoint, timeframeMins = 60) {
+    const now = Date.now()
+    const cutoff = now - (timeframeMins * 60 * 1000)
+    
+    // Implementar cálculo de taxa de erro
+    return {
+      endpoint,
+      errorCount: this.getErrorCount(endpoint, cutoff),
+      totalRequests: this.getTotalRequests(endpoint, cutoff),
+      errorRate: this.calculateRate(endpoint, cutoff)
+    }
+  }
+
+  getTopErrors(limit = 10) {
+    return Array.from(this.metrics.errorsByCode.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, limit)
+      .map(([code, count]) => ({ code, count }))
+  }
+}
+```
+
+### Alertas Inteligentes
+
+```javascript
+class AlertingSystem {
+  constructor(options = {}) {
+    this.thresholds = {
+      criticalErrorRate: options.criticalErrorRate || 0.05, // 5%
+      highErrorCount: options.highErrorCount || 50,
+      timeWindow: options.timeWindow || 5 * 60 * 1000 // 5 minutos
+    }
+    this.notifications = options.notifications || []
+  }
+
+  async checkAndAlert(metrics) {
+    const alerts = []
+
+    // Taxa de erro alta
+    if (metrics.errorRate > this.thresholds.criticalErrorRate) {
+      alerts.push({
+        level: 'critical',
+        message: `Taxa de erro alta: ${(metrics.errorRate * 100).toFixed(2)}%`,
+        action: 'investigate_immediately'
+      })
+    }
+
+    // Muitos erros em pouco tempo
+    if (metrics.recentErrorCount > this.thresholds.highErrorCount) {
+      alerts.push({
+        level: 'warning',
+        message: `Muitos erros recentes: ${metrics.recentErrorCount}`,
+        action: 'monitor_closely'
+      })
+    }
+
+    // Novos tipos de erro
+    const newErrors = metrics.getNewErrorCodes()
+    if (newErrors.length > 0) {
+      alerts.push({
+        level: 'info',
+        message: `Novos códigos de erro: ${newErrors.join(', ')}`,
+        action: 'review_integration'
+      })
+    }
+
+    // Enviar alertas
+    for (const alert of alerts) {
+      await this.sendAlert(alert)
+    }
+
+    return alerts
+  }
+
+  async sendAlert(alert) {
+    for (const notification of this.notifications) {
+      try {
+        await notification.send(alert)
+      } catch (error) {
+        console.error('Falha ao enviar alerta:', error)
+      }
+    }
+  }
+}
+```
+
+## Padrões de recuperação
+
+### Circuit Breaker
+
+```javascript
+class CircuitBreaker {
+  constructor(options = {}) {
+    this.failureThreshold = options.failureThreshold || 5
+    this.resetTimeout = options.resetTimeout || 60000
+    this.monitoringWindow = options.monitoringWindow || 60000
+    
+    this.state = 'CLOSED' // CLOSED, OPEN, HALF_OPEN
+    this.failureCount = 0
+    this.lastFailureTime = null
+    this.requests = []
+  }
+
+  async execute(operation, fallback = null) {
+    if (this.state === 'OPEN') {
+      if (this.shouldAttemptReset()) {
+        this.state = 'HALF_OPEN'
+      } else {
+        return fallback ? await fallback() : this.throwCircuitOpenError()
+      }
+    }
+
+    try {
+      const result = await operation()
+      this.onSuccess()
+      return result
+    } catch (error) {
+      this.onFailure()
+      
+      if (fallback && this.state === 'OPEN') {
+        return await fallback()
+      }
+      
+      throw error
+    }
+  }
+
+  onSuccess() {
+    this.failureCount = 0
+    this.state = 'CLOSED'
+  }
+
+  onFailure() {
+    this.failureCount++
+    this.lastFailureTime = Date.now()
+    
+    if (this.failureCount >= this.failureThreshold) {
+      this.state = 'OPEN'
+    }
+  }
+
+  shouldAttemptReset() {
+    return Date.now() - this.lastFailureTime >= this.resetTimeout
+  }
+
+  throwCircuitOpenError() {
+    throw new Error('Circuit breaker is OPEN - service temporarily unavailable')
+  }
+}
+```
+
+### Fallback Strategies
+
+```javascript
+class FallbackStrategies {
+  static async cachedResponse(operation, cacheKey, cacheTTL = 300000) {
+    try {
+      return await operation()
+    } catch (error) {
+      // Tentar cache
+      const cached = await cache.get(cacheKey)
+      if (cached) {
+        console.warn('Using cached response due to error:', error.message)
+        return cached
+      }
+      throw error
+    }
+  }
+
+  static async degradedService(operation, degradedOperation) {
+    try {
+      return await operation()
+    } catch (error) {
+      console.warn('Falling back to degraded service:', error.message)
+      return await degradedOperation()
+    }
+  }
+
+  static async queueForLater(operation, queue) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (this.isRecoverable(error)) {
+        await queue.add('retry_operation', { operation: operation.toString() })
+        return { queued: true, message: 'Operation queued for retry' }
+      }
+      throw error
+    }
+  }
+
+  static isRecoverable(error) {
+    return error.status >= 500 || error.status === 429
+  }
+}
+```
+
+## Cenários de erro em testes
+
+### Simulação de Erros
+
+```javascript
+class ErrorSimulator {
+  constructor(apiClient) {
+    this.apiClient = apiClient
+    this.originalRequest = apiClient.request.bind(apiClient)
+  }
+
+  simulateErrors(scenarios) {
+    this.apiClient.request = async (...args) => {
+      for (const scenario of scenarios) {
+        if (this.shouldTrigger(scenario)) {
+          throw this.createError(scenario.error)
+        }
+      }
+      return await this.originalRequest(...args)
+    }
+  }
+
+  shouldTrigger(scenario) {
+    return Math.random() < scenario.probability
+  }
+
+  createError(errorConfig) {
+    const error = new Error(errorConfig.message)
+    error.status = errorConfig.status
+    error.response = {
+      status: errorConfig.status,
+      data: {
+        error: {
+          code: errorConfig.code,
+          message: errorConfig.message
+        }
+      }
+    }
+    return error
+  }
+
+  restore() {
+    this.apiClient.request = this.originalRequest
+  }
+}
+
+// Uso em testes
+const simulator = new ErrorSimulator(apiClient)
+
+simulator.simulateErrors([
+  {
+    probability: 0.1, // 10% chance
+    error: {
+      status: 429,
+      code: 'RATE_LIMIT',
+      message: 'Rate limit exceeded'
+    }
+  },
+  {
+    probability: 0.05, // 5% chance
+    error: {
+      status: 500,
+      code: 'INTERNAL_ERROR',
+      message: 'Internal server error'
+    }
+  }
+])
+
+// Executar testes
+await runTests()
+
+// Restaurar comportamento normal
+simulator.restore()
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Status e códigos" icon="list" href="/pages/reference/status-codes">
+    Referência completa de status e códigos
+  </Card>
+  <Card title="Rate limits" icon="gauge-high" href="/pages/reference/rate-limits">
+    Entenda os limites de requisições
+  </Card>
+  <Card title="Segurança" icon="shield-check" href="/security">
+    Boas práticas de segurança
+  </Card>
+  <Card title="PIX IN" icon="qrcode" href="/pages/pix-in/overview">
+    Comece a receber pagamentos PIX
+  </Card>
+</CardGroup> 

@@ -1,0 +1,704 @@
+---
+title: 'Criar Webhook'
+description: 'Como configurar novos webhooks para receber notificações automáticas'
+---
+
+Esta página mostra como criar e configurar novos webhooks para receber notificações automáticas sobre eventos em sua conta.
+
+## Endpoint
+
+### POST `/api/v1/webhook`
+
+Cria um novo webhook para receber notificações automáticas.
+
+**URL Completa:**
+- **Produção**: `https://api.quantumpay.com.br/api/v1/webhook`
+
+## Headers obrigatórios
+
+```http
+Content-Type: application/json
+Authorization: Bearer <seu_token_bearer>
+```
+
+## Parâmetros do corpo
+
+### Campos Obrigatórios
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `url` | `string` | URL do endpoint que receberá os webhooks |
+| `events` | `array` | Lista de eventos que dispararão o webhook |
+
+### Campos Opcionais
+
+| Campo | Tipo | Descrição | Padrão |
+|-------|------|-----------|---------|
+| `name` | `string` | Nome descritivo do webhook | `"Webhook"` |
+| `isActive` | `boolean` | Se o webhook deve estar ativo | `true` |
+
+## Eventos disponíveis
+
+### Eventos de Transação (PIX IN)
+
+| Evento | Descrição |
+|--------|-----------|
+| `transaction_created` | QR Code criado com sucesso |
+| `transaction_paid` | PIX recebido e confirmado |
+| `transaction_refunded` | Estorno processado |
+| `transaction_infraction` | Problemas detectados pelo BC |
+
+### Eventos de Transferência (PIX OUT)
+
+| Evento | Descrição |
+|--------|-----------|
+| `transfer_created` | Transferência iniciada |
+| `transfer_completed` | PIX enviado com sucesso |
+| `transfer_canceled` | Transferência cancelada |
+| `transfer_updated` | Status alterado |
+
+## Exemplos práticos
+
+### Exemplo Básico - Todos os Eventos
+
+```bash
+curl -X POST 'https://api.quantumpay.com.br/api/v1/webhook' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' \
+  -d '{
+    "url": "https://minhaempresa.com/api/webhooks/quantumpay",
+    "name": "Webhook Principal",
+    "isActive": true,
+    "events": [
+      "transaction_created",
+      "transaction_paid",
+      "transaction_refunded",
+      "transfer_created",
+      "transfer_completed",
+      "transfer_canceled"
+    ]
+  }'
+```
+
+### Exemplo Específico - Apenas Pagamentos
+
+```bash
+curl -X POST 'https://api.quantumpay.com.br/api/v1/webhook' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' \
+  -d '{
+    "url": "https://minhaloja.com/webhooks/pagamentos",
+    "name": "Webhook E-commerce - Pagamentos",
+    "isActive": true,
+    "events": [
+      "transaction_paid",
+      "transaction_refunded"
+    ]
+  }'
+```
+
+### Exemplo Desenvolvimento - Ambiente de Teste
+
+```bash
+curl -X POST 'https://api.quantumpay.com.br/api/v1/webhook' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...' \
+  -d '{
+    "url": "https://ngrok-tunnel.ngrok.io/webhooks/test",
+    "name": "Webhook Desenvolvimento",
+    "isActive": false,
+    "events": [
+      "transaction_created",
+      "transaction_paid"
+    ]
+  }'
+```
+
+## Resposta de sucesso (201)
+
+```json
+{
+  "sucess": true,
+  "data": {
+    "id": 3,
+    "name": "Webhook Principal",
+    "url": "https://minhaempresa.com/api/webhooks/quantumpay",
+    "isActive": true,
+    "events": [
+      "transaction_created",
+      "transaction_paid", 
+      "transaction_refunded",
+      "transfer_created",
+      "transfer_completed",
+      "transfer_canceled"
+    ],
+    "signatureSecret": "whk_live_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4",
+    "createdAt": "2024-01-20T09:15:00.000Z"
+  }
+}
+```
+
+### Campos da Resposta
+
+| Campo | Descrição |
+|-------|-----------|
+| `id` | ID único do webhook criado |
+| `signatureSecret` | Chave secreta para validação HMAC |
+| `createdAt` | Data/hora de criação |
+
+<Warning>
+  **Importante**: Guarde o `signatureSecret` em local seguro. É necessário para validar a autenticidade dos webhooks recebidos.
+</Warning>
+
+## Implementações por linguagem
+
+### JavaScript/Node.js
+
+```javascript
+class WebhookCreator {
+  constructor(auth) {
+    this.auth = auth
+  }
+
+  async createWebhook(webhookData) {
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(
+        'POST',
+        '/api/v1/webhook',
+        webhookData
+      )
+      
+      return response.data.data
+    } catch (error) {
+      throw new Error(`Erro ao criar webhook: ${error.message}`)
+    }
+  }
+
+  async createPaymentWebhook(url, name = 'Webhook Pagamentos') {
+    return await this.createWebhook({
+      url,
+      name,
+      isActive: true,
+      events: [
+        'transaction_created',
+        'transaction_paid',
+        'transaction_refunded'
+      ]
+    })
+  }
+
+  async createTransferWebhook(url, name = 'Webhook Transferências') {
+    return await this.createWebhook({
+      url,
+      name,
+      isActive: true,
+      events: [
+        'transfer_created',
+        'transfer_completed',
+        'transfer_canceled'
+      ]
+    })
+  }
+
+  async createCompleteWebhook(url, name = 'Webhook Completo') {
+    return await this.createWebhook({
+      url,
+      name,
+      isActive: true,
+      events: [
+        'transaction_created',
+        'transaction_paid',
+        'transaction_refunded',
+        'transaction_infraction',
+        'transfer_created',
+        'transfer_completed',
+        'transfer_canceled',
+        'transfer_updated'
+      ]
+    })
+  }
+
+  validateWebhookUrl(url) {
+    try {
+      const urlObj = new URL(url)
+      
+      // Deve ser HTTPS em produção
+      if (process.env.NODE_ENV === 'production' && urlObj.protocol !== 'https:') {
+        throw new Error('URL deve usar HTTPS em produção')
+      }
+      
+      // Não pode ser localhost em produção
+      if (process.env.NODE_ENV === 'production' && 
+          (urlObj.hostname === 'localhost' || urlObj.hostname === '127.0.0.1')) {
+        throw new Error('URL não pode ser localhost em produção')
+      }
+      
+      return true
+    } catch (error) {
+      throw new Error(`URL inválida: ${error.message}`)
+    }
+  }
+}
+
+// Uso
+const webhookCreator = new WebhookCreator(authInstance)
+
+try {
+  // Validar URL primeiro
+  const webhookUrl = 'https://minhaempresa.com/api/webhooks/quantumpay'
+  webhookCreator.validateWebhookUrl(webhookUrl)
+
+  // Criar webhook completo
+  const webhook = await webhookCreator.createCompleteWebhook(
+    webhookUrl,
+    'Webhook Produção - Todos Eventos'
+  )
+
+  console.log('Webhook criado com sucesso!')
+  console.log('ID:', webhook.id)
+  console.log('Secret:', webhook.signatureSecret)
+  
+  // Salvar secret de forma segura
+  process.env.WEBHOOK_SECRET = webhook.signatureSecret
+  
+} catch (error) {
+  console.error('Erro:', error.message)
+}
+```
+
+### Python
+
+```python
+import os
+from urllib.parse import urlparse
+
+class WebhookCreator:
+    def __init__(self, auth_instance):
+        self.auth = auth_instance
+
+    def create_webhook(self, webhook_data):
+        response = self.auth.make_authenticated_request(
+            'POST',
+            '/api/v1/webhook',
+            webhook_data
+        )
+        
+        if response.status_code == 201:
+            return response.json()['data']
+        else:
+            raise Exception(f"Erro ao criar webhook: {response.text}")
+
+    def create_payment_webhook(self, url, name='Webhook Pagamentos'):
+        return self.create_webhook({
+            'url': url,
+            'name': name,
+            'isActive': True,
+            'events': [
+                'transaction_created',
+                'transaction_paid',
+                'transaction_refunded'
+            ]
+        })
+
+    def create_transfer_webhook(self, url, name='Webhook Transferências'):
+        return self.create_webhook({
+            'url': url,
+            'name': name,
+            'isActive': True,
+            'events': [
+                'transfer_created',
+                'transfer_completed',
+                'transfer_canceled'
+            ]
+        })
+
+    def create_complete_webhook(self, url, name='Webhook Completo'):
+        return self.create_webhook({
+            'url': url,
+            'name': name,
+            'isActive': True,
+            'events': [
+                'transaction_created',
+                'transaction_paid',
+                'transaction_refunded',
+                'transaction_infraction',
+                'transfer_created',
+                'transfer_completed',
+                'transfer_canceled',
+                'transfer_updated'
+            ]
+        })
+
+    def validate_webhook_url(self, url):
+        try:
+            parsed = urlparse(url)
+            
+            # Deve ser HTTPS em produção
+            if os.getenv('ENVIRONMENT') == 'production' and parsed.scheme != 'https':
+                raise ValueError('URL deve usar HTTPS em produção')
+            
+            # Não pode ser localhost em produção
+            if (os.getenv('ENVIRONMENT') == 'production' and 
+                parsed.hostname in ['localhost', '127.0.0.1']):
+                raise ValueError('URL não pode ser localhost em produção')
+            
+            return True
+        except Exception as error:
+            raise ValueError(f"URL inválida: {error}")
+
+# Uso
+webhook_creator = WebhookCreator(auth_instance)
+
+try:
+    # Validar URL primeiro
+    webhook_url = 'https://minhaempresa.com/api/webhooks/quantumpay'
+    webhook_creator.validate_webhook_url(webhook_url)
+
+    # Criar webhook completo
+    webhook = webhook_creator.create_complete_webhook(
+        webhook_url,
+        'Webhook Produção - Todos Eventos'
+    )
+
+    print('Webhook criado com sucesso!')
+    print(f'ID: {webhook["id"]}')
+    print(f'Secret: {webhook["signatureSecret"]}')
+    
+    # Salvar secret de forma segura
+    os.environ['WEBHOOK_SECRET'] = webhook['signatureSecret']
+    
+except Exception as error:
+    print(f'Erro: {error}')
+```
+
+### PHP
+
+```php
+<?php
+
+class WebhookCreator {
+    private $auth;
+
+    public function __construct($authInstance) {
+        $this->auth = $authInstance;
+    }
+
+    public function createWebhook($webhookData) {
+        $response = $this->auth->makeAuthenticatedRequest(
+            'POST',
+            '/api/v1/webhook',
+            $webhookData
+        );
+
+        $data = json_decode($response, true);
+
+        if ($data['sucess']) {
+            return $data['data'];
+        } else {
+            throw new Exception("Erro ao criar webhook: " . $response);
+        }
+    }
+
+    public function createPaymentWebhook($url, $name = 'Webhook Pagamentos') {
+        return $this->createWebhook([
+            'url' => $url,
+            'name' => $name,
+            'isActive' => true,
+            'events' => [
+                'transaction_created',
+                'transaction_paid',
+                'transaction_refunded'
+            ]
+        ]);
+    }
+
+    public function createTransferWebhook($url, $name = 'Webhook Transferências') {
+        return $this->createWebhook([
+            'url' => $url,
+            'name' => $name,
+            'isActive' => true,
+            'events' => [
+                'transfer_created',
+                'transfer_completed',
+                'transfer_canceled'
+            ]
+        ]);
+    }
+
+    public function createCompleteWebhook($url, $name = 'Webhook Completo') {
+        return $this->createWebhook([
+            'url' => $url,
+            'name' => $name,
+            'isActive' => true,
+            'events' => [
+                'transaction_created',
+                'transaction_paid',
+                'transaction_refunded',
+                'transaction_infraction',
+                'transfer_created',
+                'transfer_completed',
+                'transfer_canceled',
+                'transfer_updated'
+            ]
+        ]);
+    }
+
+    public function validateWebhookUrl($url) {
+        $parsed = parse_url($url);
+        
+        if (!$parsed) {
+            throw new InvalidArgumentException('URL inválida');
+        }
+        
+        // Deve ser HTTPS em produção
+        if ($_ENV['ENVIRONMENT'] === 'production' && $parsed['scheme'] !== 'https') {
+            throw new InvalidArgumentException('URL deve usar HTTPS em produção');
+        }
+        
+        // Não pode ser localhost em produção
+        if ($_ENV['ENVIRONMENT'] === 'production' && 
+            in_array($parsed['host'], ['localhost', '127.0.0.1'])) {
+            throw new InvalidArgumentException('URL não pode ser localhost em produção');
+        }
+        
+        return true;
+    }
+}
+
+// Uso
+$webhookCreator = new WebhookCreator($authInstance);
+
+try {
+    // Validar URL primeiro
+    $webhookUrl = 'https://minhaempresa.com/api/webhooks/quantumpay';
+    $webhookCreator->validateWebhookUrl($webhookUrl);
+
+    // Criar webhook completo
+    $webhook = $webhookCreator->createCompleteWebhook(
+        $webhookUrl,
+        'Webhook Produção - Todos Eventos'
+    );
+
+    echo "Webhook criado com sucesso!\n";
+    echo "ID: " . $webhook['id'] . "\n";
+    echo "Secret: " . $webhook['signatureSecret'] . "\n";
+    
+    // Salvar secret de forma segura
+    $_ENV['WEBHOOK_SECRET'] = $webhook['signatureSecret'];
+    
+} catch (Exception $error) {
+    echo "Erro: " . $error->getMessage() . "\n";
+}
+?>
+```
+
+## Boas práticas de configuração
+
+### 1. Validação de URL
+
+<AccordionGroup>
+  <Accordion title="HTTPS obrigatório" icon="lock">
+    Sempre use HTTPS em produção para segurança:
+    
+    ```javascript
+    if (url.startsWith('http://') && environment === 'production') {
+      throw new Error('Use HTTPS em produção')
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="URLs públicas" icon="globe">
+    URLs devem ser acessíveis publicamente:
+    
+    ```javascript
+    const forbiddenHosts = ['localhost', '127.0.0.1', '192.168.', '10.']
+    if (forbiddenHosts.some(host => url.includes(host))) {
+      console.warn('URL pode não ser acessível publicamente')
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Teste de conectividade" icon="signal">
+    Teste se o endpoint responde antes de configurar:
+    
+    ```javascript
+    async function testWebhookUrl(url) {
+      try {
+        const response = await fetch(url, { 
+          method: 'HEAD',
+          timeout: 5000 
+        })
+        return response.ok
+      } catch (error) {
+        return false
+      }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### 2. Escolha de Eventos
+
+```javascript
+// Configurações por tipo de negócio
+
+// E-commerce - foco em vendas
+const ecommerceEvents = [
+  'transaction_created',  // QR Code gerado
+  'transaction_paid',     // Pagamento confirmado
+  'transaction_refunded'  // Estornos
+]
+
+// Marketplace - vendas + repasses
+const marketplaceEvents = [
+  'transaction_created',
+  'transaction_paid',
+  'transaction_refunded',
+  'transfer_created',     // Repasse iniciado
+  'transfer_completed'    // Repasse concluído
+]
+
+// Fintech - operações completas
+const fintechEvents = [
+  'transaction_created',
+  'transaction_paid',
+  'transaction_refunded',
+  'transaction_infraction',
+  'transfer_created',
+  'transfer_completed',
+  'transfer_canceled',
+  'transfer_updated'
+]
+```
+
+### 3. Ambiente de Desenvolvimento
+
+```javascript
+// Configuração para desenvolvimento local
+async function setupDevWebhook() {
+  // Usar ngrok ou similar para expor localhost
+  const ngrokUrl = await startNgrokTunnel(3000)
+  
+  const webhook = await webhookCreator.createWebhook({
+    url: `${ngrokUrl}/webhooks/test`,
+    name: 'Webhook Desenvolvimento',
+    isActive: true,
+    events: ['transaction_created', 'transaction_paid']
+  })
+  
+  console.log(`Webhook dev criado: ${webhook.url}`)
+  return webhook
+}
+```
+
+## Configuração do endpoint
+
+### Estrutura Básica do Endpoint
+
+```javascript
+const express = require('express')
+const crypto = require('crypto')
+const app = express()
+
+// Middleware para webhook
+app.use('/webhooks/quantumpay', express.raw({type: 'application/json'}))
+
+app.post('/webhooks/quantumpay', (req, res) => {
+  try {
+    // 1. Verificar assinatura
+    const signature = req.headers['quantumpay-signature']
+    const payload = req.body
+    
+    if (!verifySignature(payload, signature, process.env.WEBHOOK_SECRET)) {
+      return res.status(401).send('Invalid signature')
+    }
+
+    // 2. Parse do evento
+    const event = JSON.parse(payload)
+    
+    // 3. Processar evento
+    processWebhookEvent(event)
+    
+    // 4. Responder rapidamente
+    res.status(200).send('OK')
+    
+  } catch (error) {
+    console.error('Webhook error:', error)
+    res.status(500).send('Internal server error')
+  }
+})
+
+function verifySignature(payload, signature, secret) {
+  const computedSignature = crypto
+    .createHmac('sha256', secret)
+    .update(payload)
+    .digest('hex')
+  
+  return signature === computedSignature
+}
+
+function processWebhookEvent(event) {
+  switch (event.event) {
+    case 'transaction_paid':
+      handlePaymentReceived(event.transaction)
+      break
+    case 'transfer_completed':
+      handleTransferCompleted(event.transfer)
+      break
+    default:
+      console.log('Evento não tratado:', event.event)
+  }
+}
+```
+
+## Códigos de erro
+
+| Código | Erro | Causa | Solução |
+|--------|------|-------|---------|
+| `400` | URL inválida | Formato incorreto da URL | Verificar formato da URL |
+| `400` | Eventos inválidos | Evento não existe | Usar eventos válidos |
+| `422` | URL não acessível | Endpoint não responde | Verificar conectividade |
+| `422` | Limite excedido | Muitos webhooks | Remover webhooks antigos |
+
+### Exemplo de Tratamento
+
+```javascript
+async function createWebhookSafely(webhookData) {
+  try {
+    // Validar antes de criar
+    await validateWebhookData(webhookData)
+    
+    return await webhookCreator.createWebhook(webhookData)
+  } catch (error) {
+    switch (error.code) {
+      case 'INVALID_URL':
+        throw new Error('URL inválida. Verifique o formato.')
+      case 'URL_NOT_ACCESSIBLE':
+        throw new Error('URL não está acessível. Verifique sua conectividade.')
+      case 'LIMIT_EXCEEDED':
+        throw new Error('Limite de webhooks excedido. Remova webhooks antigos.')
+      default:
+        throw new Error('Erro interno. Tente novamente.')
+    }
+  }
+}
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Listar webhooks" icon="list" href="/pages/webhook/list">
+    Veja todos os webhooks configurados
+  </Card>
+  <Card title="Remover webhook" icon="trash" href="/pages/webhook/delete">
+    Remova webhooks desnecessários
+  </Card>
+  <Card title="Eventos disponíveis" icon="calendar-days" href="/pages/webhook/events">
+    Conheça todos os eventos disponíveis
+  </Card>
+  <Card title="Verificar assinatura" icon="shield-check" href="/webhook">
+    Implemente validação de assinatura
+  </Card>
+</CardGroup> 

@@ -1,0 +1,528 @@
+---
+title: 'Listar Webhooks'
+description: 'Como consultar e gerenciar seus webhooks configurados'
+---
+
+Esta página mostra como listar e consultar todos os webhooks configurados em sua conta, permitindo visualizar configurações, status e histórico de cada endpoint.
+
+## Endpoint
+
+### GET `/api/v1/webhook`
+
+Lista todos os webhooks configurados para sua empresa.
+
+**URL Completa:**
+- **Produção**: `https://api.quantumpay.com.br/api/v1/webhook`
+
+## Headers obrigatórios
+
+```http
+Authorization: Bearer <seu_token_bearer>
+```
+
+## Exemplo de requisição
+
+```bash
+curl -X GET 'https://api.quantumpay.com.br/api/v1/webhook' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+```
+
+## Resposta de sucesso (200)
+
+```json
+{
+  "sucess": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "Webhook Principal - Pagamentos",
+      "url": "https://minhaempresa.com/api/webhooks/payments",
+      "isActive": true,
+      "events": ["transaction_created", "transaction_paid", "transfer_completed"],
+      "signatureSecret": "whk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+      "createdAt": "2024-01-15T10:30:00.000Z",
+      "lastTriggered": "2024-01-20T14:22:00.000Z",
+      "successRate": 98.5,
+      "totalSent": 1247
+    },
+    {
+      "id": 2,
+      "name": "Webhook Transferências",
+      "url": "https://minhaempresa.com/api/webhooks/transfers",
+      "isActive": true,
+      "events": ["transfer_created", "transfer_completed", "transfer_canceled"],
+      "signatureSecret": "whk_live_p6o5n4m3l2k1j0i9h8g7f6e5d4c3b2a1",
+      "createdAt": "2024-01-15T14:45:00.000Z",
+      "lastTriggered": "2024-01-20T15:10:00.000Z",
+      "successRate": 100.0,
+      "totalSent": 89
+    },
+    {
+      "id": 3,
+      "name": "Webhook Desenvolvimento",
+      "url": "https://dev.minhaempresa.com/webhooks/test",
+      "isActive": false,
+      "events": ["transaction_created", "transaction_paid"],
+      "signatureSecret": "whk_test_x9y8z7w6v5u4t3s2r1q0p9o8n7m6l5k4",
+      "createdAt": "2024-01-10T09:15:00.000Z",
+      "lastTriggered": "2024-01-18T16:30:00.000Z",
+      "successRate": 95.2,
+      "totalSent": 156
+    }
+  ],
+  "totalRows": 3
+}
+```
+
+## Campos da resposta
+
+### Informações básicas
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `id` | `number` | ID único do webhook |
+| `name` | `string` | Nome descritivo do webhook |
+| `url` | `string` | URL de destino do webhook |
+| `isActive` | `boolean` | Se o webhook está ativo |
+| `events` | `array` | Lista de eventos que disparam o webhook |
+| `signatureSecret` | `string` | Chave secreta para validação |
+
+### Métricas e datas
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `createdAt` | `string` | Data de criação do webhook |
+| `lastTriggered` | `string` | Última vez que foi disparado |
+| `successRate` | `number` | Taxa de sucesso (0-100%) |
+| `totalSent` | `number` | Total de webhooks enviados |
+
+## Consultar webhook específico
+
+### GET `/api/v1/webhook/:id`
+
+Consulta um webhook específico pelo ID.
+
+```bash
+curl -X GET 'https://api.quantumpay.com.br/api/v1/webhook/1' \
+  -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+```
+
+**Resposta:**
+
+```json
+{
+  "sucess": true,
+  "data": {
+    "id": 1,
+    "name": "Webhook Principal - Pagamentos",
+    "url": "https://minhaempresa.com/api/webhooks/payments",
+    "isActive": true,
+    "events": ["transaction_created", "transaction_paid", "transfer_completed"],
+    "signatureSecret": "whk_live_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6",
+    "createdAt": "2024-01-15T10:30:00.000Z",
+    "updatedAt": "2024-01-18T11:20:00.000Z",
+    "lastTriggered": "2024-01-20T14:22:00.000Z",
+    "statistics": {
+      "successRate": 98.5,
+      "totalSent": 1247,
+      "totalSuccess": 1228,
+      "totalFailed": 19,
+      "averageResponseTime": 245
+    },
+    "recentActivity": [
+      {
+        "date": "2024-01-20",
+        "sent": 45,
+        "success": 44,
+        "failed": 1
+      },
+      {
+        "date": "2024-01-19",
+        "sent": 38,
+        "success": 38,
+        "failed": 0
+      }
+    ]
+  }
+}
+```
+
+## Implementações por linguagem
+
+### JavaScript/Node.js
+
+```javascript
+class WebhookManager {
+  constructor(auth) {
+    this.auth = auth
+  }
+
+  async listWebhooks() {
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(
+        'GET',
+        '/api/v1/webhook'
+      )
+      
+      return response.data.data
+    } catch (error) {
+      throw new Error(`Erro ao listar webhooks: ${error.message}`)
+    }
+  }
+
+  async getWebhook(webhookId) {
+    try {
+      const response = await this.auth.makeAuthenticatedRequest(
+        'GET',
+        `/api/v1/webhook/${webhookId}`
+      )
+      
+      return response.data.data
+    } catch (error) {
+      throw new Error(`Erro ao consultar webhook: ${error.message}`)
+    }
+  }
+
+  async getActiveWebhooks() {
+    const webhooks = await this.listWebhooks()
+    return webhooks.filter(webhook => webhook.isActive)
+  }
+
+  async getWebhooksByEvent(eventType) {
+    const webhooks = await this.listWebhooks()
+    return webhooks.filter(webhook => 
+      webhook.events.includes(eventType) && webhook.isActive
+    )
+  }
+
+  async getWebhookStatistics() {
+    const webhooks = await this.listWebhooks()
+    
+    return {
+      total: webhooks.length,
+      active: webhooks.filter(w => w.isActive).length,
+      inactive: webhooks.filter(w => !w.isActive).length,
+      averageSuccessRate: webhooks.reduce((sum, w) => sum + w.successRate, 0) / webhooks.length,
+      totalSent: webhooks.reduce((sum, w) => sum + w.totalSent, 0)
+    }
+  }
+}
+
+// Uso
+const webhookManager = new WebhookManager(authInstance)
+
+// Listar todos os webhooks
+const webhooks = await webhookManager.listWebhooks()
+console.log('Webhooks configurados:', webhooks.length)
+
+// Consultar webhook específico
+const webhook = await webhookManager.getWebhook(1)
+console.log('Webhook:', webhook.name, 'Status:', webhook.isActive ? 'Ativo' : 'Inativo')
+
+// Obter estatísticas
+const stats = await webhookManager.getWebhookStatistics()
+console.log('Taxa de sucesso média:', stats.averageSuccessRate.toFixed(2) + '%')
+```
+
+### Python
+
+```python
+class WebhookManager:
+    def __init__(self, auth_instance):
+        self.auth = auth_instance
+
+    def list_webhooks(self):
+        response = self.auth.make_authenticated_request('GET', '/api/v1/webhook')
+        
+        if response.status_code == 200:
+            return response.json()['data']
+        else:
+            raise Exception(f"Erro ao listar webhooks: {response.text}")
+
+    def get_webhook(self, webhook_id):
+        response = self.auth.make_authenticated_request('GET', f'/api/v1/webhook/{webhook_id}')
+        
+        if response.status_code == 200:
+            return response.json()['data']
+        else:
+            raise Exception(f"Erro ao consultar webhook: {response.text}")
+
+    def get_active_webhooks(self):
+        webhooks = self.list_webhooks()
+        return [webhook for webhook in webhooks if webhook['isActive']]
+
+    def get_webhooks_by_event(self, event_type):
+        webhooks = self.list_webhooks()
+        return [
+            webhook for webhook in webhooks 
+            if event_type in webhook['events'] and webhook['isActive']
+        ]
+
+    def get_webhook_statistics(self):
+        webhooks = self.list_webhooks()
+        
+        if not webhooks:
+            return {
+                'total': 0,
+                'active': 0,
+                'inactive': 0,
+                'averageSuccessRate': 0,
+                'totalSent': 0
+            }
+        
+        active_count = sum(1 for w in webhooks if w['isActive'])
+        total_success_rate = sum(w['successRate'] for w in webhooks)
+        total_sent = sum(w['totalSent'] for w in webhooks)
+        
+        return {
+            'total': len(webhooks),
+            'active': active_count,
+            'inactive': len(webhooks) - active_count,
+            'averageSuccessRate': total_success_rate / len(webhooks),
+            'totalSent': total_sent
+        }
+
+# Uso
+webhook_manager = WebhookManager(auth_instance)
+
+# Listar todos os webhooks
+webhooks = webhook_manager.list_webhooks()
+print(f'Webhooks configurados: {len(webhooks)}')
+
+# Consultar webhook específico
+webhook = webhook_manager.get_webhook(1)
+status = 'Ativo' if webhook['isActive'] else 'Inativo'
+print(f'Webhook: {webhook["name"]} - Status: {status}')
+
+# Obter estatísticas
+stats = webhook_manager.get_webhook_statistics()
+print(f'Taxa de sucesso média: {stats["averageSuccessRate"]:.2f}%')
+```
+
+### PHP
+
+```php
+<?php
+
+class WebhookManager {
+    private $auth;
+
+    public function __construct($authInstance) {
+        $this->auth = $authInstance;
+    }
+
+    public function listWebhooks() {
+        $response = $this->auth->makeAuthenticatedRequest('GET', '/api/v1/webhook');
+        $data = json_decode($response, true);
+        
+        if ($data['sucess']) {
+            return $data['data'];
+        } else {
+            throw new Exception("Erro ao listar webhooks: " . $response);
+        }
+    }
+
+    public function getWebhook($webhookId) {
+        $response = $this->auth->makeAuthenticatedRequest('GET', "/api/v1/webhook/{$webhookId}");
+        $data = json_decode($response, true);
+        
+        if ($data['sucess']) {
+            return $data['data'];
+        } else {
+            throw new Exception("Erro ao consultar webhook: " . $response);
+        }
+    }
+
+    public function getActiveWebhooks() {
+        $webhooks = $this->listWebhooks();
+        return array_filter($webhooks, function($webhook) {
+            return $webhook['isActive'];
+        });
+    }
+
+    public function getWebhooksByEvent($eventType) {
+        $webhooks = $this->listWebhooks();
+        return array_filter($webhooks, function($webhook) use ($eventType) {
+            return in_array($eventType, $webhook['events']) && $webhook['isActive'];
+        });
+    }
+
+    public function getWebhookStatistics() {
+        $webhooks = $this->listWebhooks();
+        
+        if (empty($webhooks)) {
+            return [
+                'total' => 0,
+                'active' => 0,
+                'inactive' => 0,
+                'averageSuccessRate' => 0,
+                'totalSent' => 0
+            ];
+        }
+        
+        $activeCount = count(array_filter($webhooks, function($w) {
+            return $w['isActive'];
+        }));
+        
+        $totalSuccessRate = array_sum(array_column($webhooks, 'successRate'));
+        $totalSent = array_sum(array_column($webhooks, 'totalSent'));
+        
+        return [
+            'total' => count($webhooks),
+            'active' => $activeCount,
+            'inactive' => count($webhooks) - $activeCount,
+            'averageSuccessRate' => $totalSuccessRate / count($webhooks),
+            'totalSent' => $totalSent
+        ];
+    }
+}
+
+// Uso
+$webhookManager = new WebhookManager($authInstance);
+
+// Listar todos os webhooks
+$webhooks = $webhookManager->listWebhooks();
+echo "Webhooks configurados: " . count($webhooks) . "\n";
+
+// Consultar webhook específico
+$webhook = $webhookManager->getWebhook(1);
+$status = $webhook['isActive'] ? 'Ativo' : 'Inativo';
+echo "Webhook: {$webhook['name']} - Status: {$status}\n";
+
+// Obter estatísticas
+$stats = $webhookManager->getWebhookStatistics();
+echo "Taxa de sucesso média: " . number_format($stats['averageSuccessRate'], 2) . "%\n";
+?>
+```
+
+## Interpretação de métricas
+
+### Taxa de sucesso
+
+- **95-100%**: Excelente - Webhook funcionando perfeitamente
+- **90-94%**: Bom - Algumas falhas ocasionais, monitorar
+- **80-89%**: Regular - Verificar configuração do endpoint
+- **< 80%**: Crítico - Requer atenção imediata
+
+### Tempo de resposta
+
+- **< 500ms**: Excelente
+- **500ms - 2s**: Bom
+- **2s - 5s**: Aceitável
+- **> 5s**: Lento - pode causar timeouts
+
+## Solução de problemas
+
+### Webhook não dispara
+
+<AccordionGroup>
+  <Accordion title="Verificar Status" icon="toggle-on">
+    ```javascript
+    // Verificar se webhook está ativo
+    const webhook = await webhookManager.getWebhook(1)
+    if (!webhook.isActive) {
+      console.log('Webhook está inativo')
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Verificar Eventos" icon="list-check">
+    ```javascript
+    // Verificar se evento está configurado
+    const webhook = await webhookManager.getWebhook(1)
+    if (!webhook.events.includes('transaction_paid')) {
+      console.log('Evento transaction_paid não está configurado')
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Verificar URL" icon="link">
+    ```javascript
+    // Testar se URL está acessível
+    const response = await fetch(webhook.url, { method: 'HEAD' })
+    if (!response.ok) {
+      console.log('URL do webhook não está acessível')
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+### Taxa de sucesso baixa
+
+1. **Verificar resposta do endpoint**: Deve retornar status 200
+2. **Validar timeout**: Endpoint deve responder em < 10 segundos
+3. **Verificar logs**: Analisar erros no seu servidor
+4. **Testar manualmente**: Enviar payload de teste para o endpoint
+
+### Filtrar por período
+
+```javascript
+// Obter webhooks disparados nas últimas 24 horas
+async function getRecentWebhooks() {
+  const webhooks = await webhookManager.listWebhooks()
+  const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
+  
+  return webhooks.filter(webhook => 
+    webhook.lastTriggered && 
+    new Date(webhook.lastTriggered) > oneDayAgo
+  )
+}
+```
+
+## Monitoramento proativo
+
+### Script de monitoramento
+
+```javascript
+async function monitorarWebhooks() {
+  const stats = await webhookManager.getWebhookStatistics()
+  
+  // Alertar se taxa de sucesso média < 95%
+  if (stats.averageSuccessRate < 95) {
+    console.warn(`⚠️ Taxa de sucesso baixa: ${stats.averageSuccessRate.toFixed(2)}%`)
+  }
+  
+  // Verificar webhooks inativos
+  const activeCount = stats.active
+  const totalCount = stats.total
+  
+  if (activeCount < totalCount) {
+    console.warn(`⚠️ ${totalCount - activeCount} webhook(s) inativo(s)`)
+  }
+  
+  // Verificar webhooks sem atividade recente
+  const webhooks = await webhookManager.listWebhooks()
+  const threeDaysAgo = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000)
+  
+  const staleWebhooks = webhooks.filter(webhook => 
+    webhook.isActive && 
+    (!webhook.lastTriggered || new Date(webhook.lastTriggered) < threeDaysAgo)
+  )
+  
+  if (staleWebhooks.length > 0) {
+    console.warn(`⚠️ ${staleWebhooks.length} webhook(s) sem atividade há 3+ dias`)
+  }
+}
+
+// Executar monitoramento a cada hora
+setInterval(monitorarWebhooks, 60 * 60 * 1000)
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Criar webhook" icon="plus" href="/pages/webhook/create">
+    Cadastre novos webhooks para seus endpoints
+  </Card>
+  <Card title="Remover webhook" icon="trash" href="/pages/webhook/delete">
+    Remova webhooks desnecessários
+  </Card>
+  <Card title="Eventos disponíveis" icon="calendar-days" href="/pages/webhook/events">
+    Veja todos os eventos que podem disparar webhooks
+  </Card>
+  <Card title="Verificar assinatura" icon="shield-check" href="/webhook">
+    Aprenda a validar a assinatura dos webhooks
+  </Card>
+</CardGroup> 

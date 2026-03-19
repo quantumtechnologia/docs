@@ -1,0 +1,342 @@
+---
+title: 'PIX IN - Recebimento de Pagamentos'
+description: 'Receba pagamentos PIX de forma instantânea através de QR Codes'
+---
+
+O PIX IN permite que você receba pagamentos de forma instantânea através da geração de QR Codes PIX. Ideal para cobranças, vendas online e qualquer situação onde você precisa receber um pagamento.
+
+## Como funciona
+
+O PIX IN funciona através da criação de QR Codes dinâmicos que seus clientes podem escanear para realizar o pagamento:
+
+<CardGroup cols={2}>
+  <Card title="QR Code gerado" icon="qrcode">
+    Você cria um QR Code com valor específico através da API
+  </Card>
+  <Card title="Pagamento pelo cliente" icon="credit-card">
+    Cliente escaneia o QR Code e confirma o pagamento no app do banco
+  </Card>
+  <Card title="Confirmação em tempo real" icon="bolt">
+    Você recebe confirmação em tempo real via webhook
+  </Card>
+  <Card title="Valor disponível" icon="money-bill">
+    Valor fica disponível imediatamente em sua conta
+  </Card>
+</CardGroup>
+
+## Implementação rápida
+
+### 1. Criar QR Code PIX
+
+```bash
+curl --location 'https://api.quantumpay.com.br/api/v1/pix/in/qrcode' \
+  --header 'Authorization: Bearer SEU_TOKEN_AQUI' \
+  --header 'Content-Type: application/json' \
+  --data-raw '{
+    "amountInCents": 5000,
+    "description": "Pagamento de serviços",
+    "postbackUrl": "https://exemplo.com.br/webhook/pix-in",
+    "customer": {
+      "name": "Cliente Exemplo",
+      "email": "cliente@exemplo.com",
+      "document": "11122233344",
+      "documentType": "cpf",
+      "phone": "(11) 91234-5678"
+    }
+  }'
+```
+
+### 2. Resposta com QR Code
+
+```json
+{
+  "success": true,
+  "message": "Transação criada com sucesso",
+  "data": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "pix": {
+      "emv": "00020126...SEU_CODIGO_EMV_AQUI...6304ABCD",
+      "qrCode": "[BASE64_ENCODED_QRCODE_IMAGE]"
+    },
+    "status": "pending",
+    "fees": 0
+  }
+}
+```
+
+### 3. Exibir QR Code para Cliente
+
+```html
+<!-- Mostrar QR Code -->
+<img src="[BASE64_ENCODED_QRCODE_IMAGE]" alt="QR Code PIX" style="width: 300px;">
+
+<!-- Ou usar o código EMV -->
+<div class="pix-code">
+  <p>Copie e cole no seu banco:</p>
+  <input type="text" value="00020126...SEU_CODIGO_EMV_AQUI...6304ABCD" readonly>
+</div>
+```
+
+## Parâmetros detalhados
+
+### Campos Obrigatórios
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `amountInCents` | `number` | Valor em centavos (ex: 10000 = R$ 100,00) |
+| `customer` | `object` | Dados do cliente pagador |
+| `customer.name` | `string` | Nome completo do cliente |
+| `customer.email` | `string` | Email do cliente |
+| `customer.documentType` | `string` | Tipo do documento (`cpf` ou `cnpj`) |
+| `customer.document` | `string` | Número do documento (apenas números) |
+
+### Campos Opcionais
+
+| Campo | Tipo | Descrição |
+|-------|------|-----------|
+| `description` | `string` | Descrição da transação (máx. 140 caracteres) |
+| `postbackUrl` | `string` | URL específica para webhooks desta transação |
+| `items` | `array` | Lista de itens da compra |
+| `customer.phone` | `string` | Telefone do cliente |
+| `customer.billingAddress` | `object` | Endereço de cobrança |
+
+### Exemplo Completo
+
+```json
+{
+  "amountInCents": 10000,
+  "description": "Assinatura - Plano Exemplo",
+  "postbackUrl": "https://exemplo.com.br/webhooks/pix-payments",
+  "customer": {
+    "name": "Cliente Exemplo Silva",
+    "email": "cliente@exemplo.com",
+    "documentType": "cpf",
+    "document": "11122233344",
+    "phone": "11912345678",
+    "billingAddress": {
+      "street": "Rua Exemplo",
+      "number": "100",
+      "neighborhood": "Centro",
+      "city": "São Paulo",
+      "state": "SP",
+      "zipCode": "00000000"
+    }
+  },
+  "items": [
+    {
+      "title": "Produto Exemplo",
+      "tangible": false,
+      "quantity": 1,
+      "amountInCents": 10000
+    }
+  ]
+}
+```
+
+## Recebendo confirmações
+
+### Via Webhook
+
+Configure um webhook para receber confirmações automáticas:
+
+```json
+{
+  "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+  "type": "transaction",
+  "event": "transaction_paid",
+  "scope": "postback",
+  "transaction": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "amount": 5000,
+    "status": "paid",
+    "pix": {
+      "endToEndId": "E00000000202401011200000000000000",
+      "payerInfo": {
+        "bank": "000",
+        "name": "Cliente Pagador",
+        "branch": "0001",
+        "document": "11122233344",
+        "account_type": "CHECKING",
+        "account_number": "000000"
+      }
+    }
+  }
+}
+```
+
+### Processamento do Webhook
+
+```javascript
+app.post('/webhooks/pix-payments', (req, res) => {
+  const event = req.body
+  
+  if (event.event === 'transaction_paid') {
+    const transaction = event.transaction
+    
+    // Liberar produto/serviço
+    await liberarProduto(transaction.id)
+    
+    // Enviar email de confirmação
+    await enviarEmailConfirmacao(transaction.customer.email)
+    
+    // Atualizar banco de dados
+    await atualizarStatusPagamento(transaction.id, 'paid')
+  }
+
+  res.status(200).send('OK')
+})
+```
+
+## Taxas e valores
+
+### Estrutura de Taxas
+
+- **Taxa**: Consulte sua conta para verificar as taxas aplicáveis
+- **Sem taxa mínima**: Cobranças a partir de R$ 0,01
+- **Sem mensalidade**: Pague apenas pelo que usar
+
+### Cálculo de Valores
+
+```javascript
+// Exemplo de cálculo
+const valorProduto = 5000 // R$ 50,00 em centavos
+const taxa = 0 // Taxa aplicável
+
+// Na resposta da API
+{
+  "data": {
+    "amount": 5000,      // Valor total
+    "fees": 0           // Taxa cobrada
+  }
+}
+```
+
+## Status das transações
+
+| Status | Descrição | Próximo Passo |
+|--------|-----------|---------------|
+| `pending` | Aguardando pagamento | Mostrar QR Code para cliente |
+| `paid` | Pago com sucesso | Liberar produto/serviço |
+| `canceled` | Cancelado | Gerar novo QR Code se necessário |
+| `refunded` | Estornado | Valor devolvido ao pagador |
+
+## Fluxo completo de implementação
+
+### 1. Gerar QR Code
+
+```javascript
+async function criarPagamentoPIX(dadosPagamento) {
+  const response = await fetch('/api/v1/pix/in/qrcode', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(dadosPagamento)
+  })
+
+  const data = await response.json()
+  return data.data
+}
+```
+
+### 2. Exibir para Cliente
+
+```javascript
+function exibirQRCode(transacao) {
+  // Mostrar QR Code
+  document.getElementById('qr-code').src = transacao.pix.qrCode
+  
+  // Mostrar código para copiar
+  document.getElementById('pix-code').value = transacao.pix.emv
+  
+  // Iniciar verificação de status
+  verificarStatus(transacao.id)
+}
+```
+
+### 3. Verificar Status (Polling)
+
+```javascript
+async function verificarStatus(transactionId) {
+  const interval = setInterval(async () => {
+    const response = await fetch(`/api/v1/transactions/${transactionId}`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    const data = await response.json()
+    
+    if (data.status === 'paid') {
+      clearInterval(interval)
+      mostrarSucesso()
+    }
+  }, 3000) // Verifica a cada 3 segundos
+}
+```
+
+### 4. Processar Confirmação
+
+```javascript
+function mostrarSucesso() {
+  document.getElementById('qr-code-container').style.display = 'none'
+  document.getElementById('sucesso-container').style.display = 'block'
+  
+  // Redirecionar após 3 segundos
+  setTimeout(() => {
+    window.location.href = '/obrigado'
+  }, 3000)
+}
+```
+
+## Boas práticas
+
+### Segurança
+
+<AccordionGroup>
+  <Accordion title="Validação de dados" icon="shield-check">
+    - Sempre valide CPF/CNPJ antes de enviar
+    - Sanitize dados de entrada
+    - Verifique valores mínimos e máximos
+    - Use HTTPS obrigatoriamente
+  </Accordion>
+  
+  <Accordion title="Idempotência" icon="arrows-rotate">
+    - Use IDs únicos para cada transação
+    - Implemente verificação de duplicatas
+    - Mantenha referências internas
+    - Trate reenvios de webhook adequadamente
+  </Accordion>
+  
+  <Accordion title="Monitoramento" icon="chart-line">
+    - Monitore taxa de conversão
+    - Acompanhe tempos de pagamento
+    - Verifique abandono de carrinho
+    - Alerte sobre falhas de webhook
+  </Accordion>
+</AccordionGroup>
+
+### Performance
+
+- **Cache**: Armazene QR Codes por período limitado
+- **Timeout**: Configure timeouts adequados para requisições
+- **Retry**: Implemente retry para chamadas falhadas
+- **Batch**: Agrupe operações quando possível
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="Criar QR Code" icon="plus" href="/pages/pix-in/create-qrcode">
+    Guia detalhado para criar QR Codes PIX
+  </Card>
+  <Card title="Configurar webhooks" icon="webhook" href="/webhook">
+    Configure notificações automáticas
+  </Card>
+  <Card title="PIX OUT" icon="bolt" href="/pages/pix-out/overview">
+    Aprenda a enviar transferências PIX
+  </Card>
+  <Card title="Relatórios" icon="chart-bar" href="/pages/reference/status-codes">
+    Monitore suas transações
+  </Card>
+</CardGroup> 

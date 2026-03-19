@@ -1,97 +1,158 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: API Quantum Pay – Guia de Integração
+description: Integre a API Quantum Pay com exemplos e referências objetivas
 ---
 
-## Setting up
+Versão 1.0
+Produção: `https://api.quantumpay.com.br`
 
-Get your documentation site up and running in minutes.
+---
+## Funcionalidades
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+Nossa API oferece funcionalidades completas para pagamentos PIX:
 
-## Make it yours
+### PIX IN — Recebimento
+Crie QR Codes PIX para receber pagamentos de forma instantânea e segura.
 
-Design a docs site that looks great and empowers your users.
+```bash
+curl -X POST 'https://api.quantumpay.com.br/api/v1/pix/in/qrcode' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <seu_token>' \
+  -d '{
+    "amountInCents": 10000,
+    "description": "Assinatura - Plano Exemplo",
+    "customer": {
+      "name": "Cliente Exemplo Silva",
+      "email": "cliente@exemplo.com",
+      "documentType": "cpf",
+      "document": "11122233344"
+    }
+  }'
+```
 
-<Columns cols={2}>
+### PIX OUT — Envio
+Realize transferências PIX para qualquer chave PIX de forma programática.
+
+```bash
+curl -X POST 'https://api.quantumpay.com.br/api/v1/pix/out/pixkey' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <seu_token>' \
+  -H 'X-Idempotency-Key: transfer_unique_id' \
+  -d '{
+    "pixKey": "contato@empresa.com.br",
+    "amount": 150000,
+    "description": "Pagamento de fornecedor"
+  }'
+```
+
+### Webhooks
+Receba notificações automáticas sobre mudanças de status em tempo real.
+
+```json
+{
+  "id": "wh_64f8a2b1c3d4e5f6g7h8i9j0",
+  "type": "transaction",
+  "event": "transaction_paid",
+  "transaction": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "amount": 29990,
+    "status": "paid"
+  }
+}
+```
+
+## Arquitetura
+
+Nossa API foi construída com três princípios fundamentais:
+
+### Design orientado à ação
+Cada endpoint representa exatamente o que você precisa fazer:
+- `POST /api/v1/pix/in/qrcode` - Criar QR Code para receber
+- `POST /api/v1/pix/out/pixkey` - Enviar PIX para chave
+- `GET /api/v1/webhook` - Listar webhooks
+
+### Idempotência
+Execute a mesma requisição quantas vezes precisar, sem efeitos colaterais:
+```http
+X-Idempotency-Key: idempotency_exemplo_001
+```
+
+### Respostas padronizadas
+Sempre retornamos uma estrutura padronizada:
+```json
+{
+  "success": true,
+  "message": "Operação realizada com sucesso",
+  "data": { /* seus dados aqui */ }
+}
+```
+
+## Primeiros passos
+
+<CardGroup cols={2}>
   <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
+    title="Autenticação"
+    icon="shield-halved"
+    href="/pages/auth/getting-started"
   >
-    Edit your docs locally and preview them in real time.
+    Obtenha suas credenciais e gere seu primeiro token de acesso
   </Card>
   <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
+    title="PIX IN (Receber)"
+    icon="qrcode"
+    href="/pages/pix-in/overview"
   >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+    Crie QR Codes PIX para receber pagamentos
   </Card>
   <Card
-    title="API documentation"
-    icon="terminal"
+    title="PIX OUT (Enviar)"
+    icon="bolt"
+    href="/pages/pix-out/overview"
+  >
+    Envie transferências PIX programaticamente
+  </Card>
+  <Card
+    title="Webhooks"
+    href="/webhook"
+  >
+    Configure notificações automáticas em tempo real
+  </Card>
+</CardGroup>
+
+## Ambientes
+
+| Ambiente     | URL Base                                   | Uso                      |
+|-------------|-------------------------------------------|--------------------------|
+| **Produção** | `https://api.quantumpay.com.br`         | Operação real            |
+
+## Suporte e recursos
+
+<CardGroup cols={2}>
+  <Card
+    title="Suporte técnico"
+    icon="phone"
+    href="mailto:contato@quantumpay.com.br"
+  >
+    Nossa equipe está pronta para ajudar você
+  </Card>
+  <Card
+    title="Segurança"
+    href="/security"
+  >
+    Conheça nossas práticas de segurança
+  </Card>
+  <Card
+    title="Referência da API"
+    icon="book-open"
     href="/api-reference/introduction"
   >
-    Auto-generate API documentation from OpenAPI specifications.
+    Explore todos os endpoints disponíveis
   </Card>
-</Columns>
+</CardGroup>
+---
 
-## Create beautiful pages
+## Contato
 
-Everything you need to create world-class documentation.
-
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
-
-## Need inspiration?
-
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+Suporte técnico: contato@quantumpay.com.br
+**WhatsApp**: +55 11 99999-9999
+**Horário**: Segunda a Sexta, 08h às 18h (BRT)

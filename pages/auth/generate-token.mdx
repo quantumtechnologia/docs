@@ -1,0 +1,366 @@
+---
+title: 'Gerar Token de Acesso'
+description: 'Como gerar e usar tokens Bearer para autenticação na API'
+---
+
+Depois de obter suas credenciais, você precisa gerar um token Bearer para fazer requisições autenticadas à API. Este token é usado em todas as operações da API.
+
+## Endpoint de autenticação
+
+### POST `/api/auth`
+
+Gera um token JWT Bearer válido por 30 minutos usando suas credenciais API.
+
+**URL Base:**
+- **Produção**: `https://api.quantumpay.com.br/api/auth`
+
+## Como funciona
+
+### 1. Autenticação Basic Auth
+
+Use suas credenciais no formato `apiKey:apiSecret` encodado em Base64:
+
+```bash
+# Suas credenciais
+API_KEY="pk_test_abc123def456ghi789"
+API_SECRET="sk_test_xyz789uvw012mno345"
+
+# Gerar Base64
+echo -n "${API_KEY}:${API_SECRET}" | base64
+# Resultado: cGtfdGVzdF9hYmMxMjNkZWY0NTZnaGk3ODk6c2tfdGVzdF94eXo3ODl1dncwMTJtbm8zNDU=
+```
+
+### 2. Fazer Requisição
+
+```bash
+curl -X POST 'https://api.quantumpay.com.br/api/auth' \
+  -H 'Authorization: Basic cGtfdGVzdF9hYmMxMjNkZWY0NTZnaGk3ODk6c2tfdGVzdF94eXo3ODl1dncwMTJtbm8zNDU='
+```
+
+### 3. Resposta de Sucesso
+
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOnsiY29tcGFueSI6eyJpZCI6ImNsbTh4OXkwejEyMzQ1Njc4OTBhYmNkZWYiLCJuYW1lIjoiTWluaGEgRW1wcmVzYSBMdGRhIiwiZG9jdW1lbnQiOiIxMjM0NTY3ODkwMTIzNCJ9fSwidHlwZSI6IkNPTVBBTlkiLCJpYXQiOjE3MDM2MDQ5MjAsImV4cCI6MTcwMzYwNjcyMH0.signature",
+  "tokenType": "Bearer",
+  "expiresIn": 1800000
+}
+```
+
+## Implementações por linguagem
+
+### Node.js
+
+```javascript
+const axios = require('axios')
+
+class Quantum Pay {
+  constructor(apiKey, apiSecret, baseUrl) {
+    this.apiKey = apiKey
+    this.apiSecret = apiSecret
+    this.baseUrl = baseUrl
+    this.token = null
+    this.tokenExpiry = null
+  }
+
+  async getToken() {
+    // Verificar se token ainda é válido
+    if (this.token && this.tokenExpiry > Date.now()) {
+      return this.token
+    }
+
+    // Gerar novo token
+    const credentials = Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64')
+    
+    try {
+      const response = await axios.post(`${this.baseUrl}/api/auth`, {}, {
+        headers: {
+          'Authorization': `Basic ${credentials}`
+        }
+      })
+
+      this.token = response.data.token
+      this.tokenExpiry = Date.now() + (response.data.expiresIn - 60000) // 1 minuto de margem
+
+      return this.token
+    } catch (error) {
+      throw new Error(`Erro na autenticação: ${error.response?.data?.message || error.message}`)
+    }
+  }
+
+  async makeAuthenticatedRequest(method, endpoint, data = null) {
+    const token = await this.getToken()
+    
+    return axios({
+      method,
+      url: `${this.baseUrl}${endpoint}`,
+      data,
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+  }
+}
+
+// Uso
+const auth = new Quantum Pay(
+  process.env.QUANTUMPAY_API_KEY,
+  process.env.QUANTUMPAY_API_SECRET,
+  process.env.QUANTUMPAY_BASE_URL
+)
+
+// Fazer requisição autenticada
+const response = await auth.makeAuthenticatedRequest('POST', '/api/v1/pix/in/qrcode', {
+  amountInCents: 10000,
+  description: 'Teste'
+})
+```
+
+### Python
+
+```python
+import requests
+import base64
+import time
+from datetime import datetime, timedelta
+
+class Quantum Pay:
+    def __init__(self, api_key, api_secret, base_url):
+        self.api_key = api_key
+        self.api_secret = api_secret
+        self.base_url = base_url
+        self.token = None
+        self.token_expiry = None
+
+    def get_token(self):
+        # Verificar se token ainda é válido
+        if self.token and self.token_expiry and datetime.now() < self.token_expiry:
+            return self.token
+
+        # Gerar novo token
+        credentials = base64.b64encode(f"{self.api_key}:{self.api_secret}".encode()).decode()
+        
+        response = requests.post(
+            f"{self.base_url}/api/auth",
+            headers={
+                'Authorization': f'Basic {credentials}'
+            }
+        )
+
+        if response.status_code == 200:
+            data = response.json()
+            self.token = data['token']
+            # Subtrair 1 minuto para margem de segurança
+            self.token_expiry = datetime.now() + timedelta(milliseconds=data['expiresIn'] - 60000)
+            return self.token
+        else:
+            raise Exception(f"Erro na autenticação: {response.text}")
+
+    def make_authenticated_request(self, method, endpoint, data=None):
+        token = self.get_token()
+        
+        return requests.request(
+            method,
+            f"{self.base_url}{endpoint}",
+            json=data,
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json'
+            }
+        )
+
+# Uso
+auth = Quantum Pay(
+    os.getenv('QUANTUMPAY_API_KEY'),
+    os.getenv('QUANTUMPAY_API_SECRET'),
+    os.getenv('QUANTUMPAY_BASE_URL')
+)
+
+# Fazer requisição autenticada
+response = auth.make_authenticated_request('POST', '/api/v1/pix/in/qrcode', {
+    'amountInCents': 10000,
+    'description': 'Teste'
+})
+```
+
+### PHP
+
+```php
+<?php
+
+class Quantum Pay {
+    private $apiKey;
+    private $apiSecret;
+    private $baseUrl;
+    private $token;
+    private $tokenExpiry;
+
+    public function __construct($apiKey, $apiSecret, $baseUrl) {
+        $this->apiKey = $apiKey;
+        $this->apiSecret = $apiSecret;
+        $this->baseUrl = $baseUrl;
+    }
+
+    public function getToken() {
+        // Verificar se token ainda é válido
+        if ($this->token && $this->tokenExpiry && time() < $this->tokenExpiry) {
+            return $this->token;
+        }
+
+        // Gerar novo token
+        $credentials = base64_encode($this->apiKey . ':' . $this->apiSecret);
+        
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => $this->baseUrl . '/api/auth',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_POST => true,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Basic ' . $credentials
+            ]
+        ]);
+
+        $response = curl_exec($curl);
+        $httpCode = curl_getinfo($curl, CURLINFO_HTTP_CODE);
+        curl_close($curl);
+
+        if ($httpCode === 200) {
+            $data = json_decode($response, true);
+            $this->token = $data['token'];
+            $this->tokenExpiry = time() + (($data['expiresIn'] / 1000) - 60); // 1 minuto de margem
+            return $this->token;
+        } else {
+            throw new Exception("Erro na autenticação: " . $response);
+        }
+    }
+
+    public function makeAuthenticatedRequest($method, $endpoint, $data = null) {
+        $token = $this->getToken();
+        
+        $curl = curl_init();
+        curl_setopt_array($curl, [
+            CURLOPT_URL => $this->baseUrl . $endpoint,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CUSTOMREQUEST => $method,
+            CURLOPT_HTTPHEADER => [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json'
+            ]
+        ]);
+
+        if ($data) {
+            curl_setopt($curl, CURLOPT_POSTFIELDS, json_encode($data));
+        }
+
+        return curl_exec($curl);
+    }
+}
+
+// Uso
+$auth = new Quantum Pay(
+    $_ENV['QUANTUMPAY_API_KEY'],
+    $_ENV['QUANTUMPAY_API_SECRET'],
+    $_ENV['QUANTUMPAY_BASE_URL']
+);
+
+// Fazer requisição autenticada
+$response = $auth->makeAuthenticatedRequest('POST', '/api/v1/pix/in/qrcode', [
+    'amountInCents' => 10000,
+    'description' => 'Teste'
+]);
+?>
+```
+
+## Gerenciamento de tokens
+
+### Características do Token
+
+- **Duração**: 30 minutos (1800 segundos)
+- **Tipo**: JWT (JSON Web Token)
+- **Renovação**: Automática antes da expiração
+- **Escopo**: Limitado às permissões da empresa
+
+### Boas práticas
+
+<AccordionGroup>
+  <Accordion title="Renovação automática" icon="arrows-rotate">
+    Implemente renovação automática 1-2 minutos antes da expiração:
+    
+    ```javascript
+    // Verificar se precisa renovar (1 minuto antes)
+    if (Date.now() + 60000 >= this.tokenExpiry) {
+      await this.renewToken()
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Cache inteligente" icon="database">
+    Cache tokens em memória ou Redis para evitar requisições desnecessárias:
+    
+    ```javascript
+    // Cache por 25 minutos (5 min de margem)
+    await redis.set('quantumpay_token', token, 'EX', 1500)
+    ```
+  </Accordion>
+  
+  <Accordion title="Tratamento de erros" icon="triangle-exclamation">
+    Sempre trate erros de autenticação e renovação:
+    
+    ```javascript
+    try {
+      return await this.makeRequest()
+    } catch (error) {
+      if (error.status === 401) {
+        await this.renewToken()
+        return await this.makeRequest()
+      }
+      throw error
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tratamento de erros
+
+### Possíveis Erros
+
+| Código | Erro | Solução |
+|--------|------|---------|
+| `400` | Credenciais malformadas | Verificar formato das credenciais |
+| `401` | Credenciais inválidas | Verificar API Key e Secret |
+| `403` | Conta suspensa | Entrar em contato com suporte |
+| `429` | Rate limit excedido | Aguardar e tentar novamente |
+
+### Exemplo de Tratamento
+
+```javascript
+async function authenticateWithRetry(maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await getToken()
+    } catch (error) {
+      if (error.status === 429 && attempt < maxRetries) {
+        // Rate limit - aguardar antes de tentar novamente
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+        continue
+      }
+      throw error
+    }
+  }
+}
+```
+
+---
+
+## Próximos passos
+
+<CardGroup cols={2}>
+  <Card title="PIX IN" icon="qrcode" href="/pages/pix-in/overview">
+    Comece a receber pagamentos com QR Codes PIX
+  </Card>
+  <Card title="PIX OUT" icon="bolt" href="/pages/pix-out/overview">
+    Envie transferências PIX programaticamente
+  </Card>
+</CardGroup> 

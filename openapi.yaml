@@ -1,0 +1,653 @@
+openapi: 3.1.0
+info:
+  title: API Quantum Pay
+  description: API para gerenciamento de pagamentos PIX da Quantum Pay. Permite criar QR codes para recebimento, realizar transferências PIX e gerenciar webhooks.
+  version: 1.0.0
+  contact:
+    name: Quantum Pay
+    email: contato@quantumpay.com.br
+    url: https://quantumpay.com.br
+servers:
+  - url: https://api.quantumpay.com.br
+    description: Ambiente de produção
+
+paths:
+  /api/auth:
+    post:
+      summary: Gerar token JWT
+      description: Gera um token JWT para autenticação usando API Key e API Secret. Esta rota NÃO aceita body, apenas o header Authorization com Basic Auth.
+      tags:
+        - Autenticação
+      security:
+        - basicAuth: []
+      x-codeSamples:
+        - lang: curl
+          label: cURL
+          source: |
+            curl -X POST 'https://api.quantumpay.com.br/api/auth' \
+              -H 'Authorization: Basic SEU_BASIC_AUTH_AQUI'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const response = await axios.post('https://api.quantumpay.com.br/api/auth', {}, {
+              headers: {
+                'Authorization': 'Basic SEU_BASIC_AUTH_AQUI'
+              }
+            })
+        - lang: python
+          label: Python
+          source: |
+            response = requests.post(
+                'https://api.quantumpay.com.br/api/auth',
+                headers={
+                    'Authorization': 'Basic SEU_BASIC_AUTH_AQUI'
+                }
+            )
+      responses:
+        '200':
+          description: Token gerado com sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                    description: Token JWT válido por 30 minutos
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  expires_in:
+                    type: integer
+                    description: Tempo de expiração em segundos
+                    example: 1800
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/pix/in/qrcode:
+    post:
+      summary: Criar QR Code PIX para recebimento
+      description: Cria um QR Code PIX para receber pagamentos instantâneos
+      tags:
+        - PIX IN
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amountInCents
+                - customer
+              properties:
+                amountInCents:
+                  type: integer
+                  minimum: 100
+                  description: Valor em centavos (mínimo R$ 1,00)
+                  example: 5000
+                description:
+                  type: string
+                  maxLength: 140
+                  description: Descrição que aparecerá no extrato do pagador
+                  example: "Pagamento de serviços"
+                postbackUrl:
+                  type: string
+                  format: uri
+                  description: URL para receber notificações de webhook
+                  example: "https://exemplo.com.br/webhook"
+                customer:
+                  $ref: '#/components/schemas/Customer'
+                items:
+                  type: array
+                  description: Lista de itens do pedido
+                  items:
+                    $ref: '#/components/schemas/Item'
+                billingAddress:
+                  $ref: '#/components/schemas/Address'
+      responses:
+        '201':
+          description: QR Code criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PixQRCodeResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/pix/out/pixkey:
+    post:
+      summary: Enviar transferência PIX
+      description: Realiza transferência PIX para qualquer chave PIX
+      tags:
+        - PIX OUT
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: x-idempotency-key
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Chave de idempotência para evitar duplicações
+          example: "idempotency_exemplo_001"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - pixKey
+                - amount
+              properties:
+                pixKey:
+                  type: string
+                  description: Chave PIX de destino (CPF, CNPJ, email, telefone ou chave aleatória)
+                  example: "fornecedor@exemplo.com"
+                amount:
+                  type: integer
+                  minimum: 1
+                  description: Valor da transferência em centavos
+                  example: 10000
+                currency:
+                  type: string
+                  description: Moeda da transferência (apenas BRL aceito)
+                  default: "BRL"
+                  example: "BRL"
+                description:
+                  type: string
+                  maxLength: 140
+                  description: Descrição da transferência
+                  example: "Transfer PIX Exemplo"
+                postbackUrl:
+                  type: string
+                  format: uri
+                  description: URL para receber notificações de status da transferência
+                  example: "https://exemplo.com.br/webhook/pix-out"
+      responses:
+        '201':
+          description: Transferência iniciada com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PixTransferResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Chave de idempotência já utilizada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/company:
+    get:
+      summary: Obter detalhes da empresa
+      description: Retorna os detalhes da empresa autenticada e seus vendedores associados
+      tags:
+        - Empresa
+      security:
+        - bearerAuth: []
+      x-codeSamples:
+        - lang: curl
+          label: cURL
+          source: |
+            curl -X GET 'https://api.quantumpay.com.br/api/v1/company' \
+              -H 'Authorization: Bearer SEU_TOKEN_JWT'
+        - lang: javascript
+          label: Node.js
+          source: |
+            const response = await axios.get('https://api.quantumpay.com.br/api/v1/company', {
+              headers: {
+                'Authorization': 'Bearer SEU_TOKEN_JWT'
+              }
+            })
+        - lang: python
+          label: Python
+          source: |
+            response = requests.get(
+                'https://api.quantumpay.com.br/api/v1/company',
+                headers={
+                    'Authorization': 'Bearer SEU_TOKEN_JWT'
+                }
+            )
+      responses:
+        '200':
+          description: Detalhes da empresa retornados com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/webhook:
+    get:
+      summary: Listar webhooks
+      description: Lista todos os webhooks configurados
+      tags:
+        - Webhooks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lista de webhooks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  webhooks:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Webhook'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+    post:
+      summary: Criar webhook
+      description: Configura um novo webhook para receber notificações de eventos
+      tags:
+        - Webhooks
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+                - events
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: URL que receberá as notificações
+                  example: "https://exemplo.com.br/webhook"
+                events:
+                  type: array
+                  description: Lista de eventos para notificar
+                  items:
+                    type: string
+                    enum:
+                      - transaction_created
+                      - transaction_paid
+                      - transaction_refunded
+                      - transaction_infraction
+                      - transfer_created
+                      - transfer_updated
+                      - transfer_completed
+                      - transfer_canceled
+                  example: ["transaction_paid", "transfer_completed"]
+      responses:
+        '201':
+          description: Webhook criado com sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Webhook'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /api/v1/webhook/{id}:
+    delete:
+      summary: Remover webhook
+      description: Remove um webhook configurado
+      tags:
+        - Webhooks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: ID do webhook a ser removido
+          example: "webhook_abc123xyz"
+      responses:
+        '204':
+          description: Webhook removido com sucesso
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Webhook não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+components:
+  securitySchemes:
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Autenticação Basic usando API Key como usuário e API Secret como senha
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Token JWT no cabeçalho Authorization
+
+  schemas:
+    Customer:
+      type: object
+      required:
+        - name
+        - email
+        - document
+        - phone
+      properties:
+        name:
+          type: string
+          description: Nome completo do cliente
+          example: "Cliente Exemplo"
+        email:
+          type: string
+          format: email
+          description: Email do cliente
+          example: "cliente@exemplo.com"
+        documentType:
+          type: string
+          enum: [cpf, cnpj]
+          description: Tipo de documento do cliente
+          example: "cpf" 
+        document:
+          type: string
+          description: CPF ou CNPJ do cliente
+          example: "11122233344"
+        phone:
+          type: string
+          description: Telefone do cliente
+          example: "(11) 91234-5678"
+
+    Item:
+      type: object
+      required:
+        - name
+        - quantity
+        - price
+      properties:
+        name:
+          type: string
+          description: Nome do item
+          example: "Produto A"
+        quantity:
+          type: integer
+          minimum: 1
+          description: Quantidade
+          example: 2
+        price:
+          type: integer
+          description: Preço unitário em centavos
+          example: 2500
+
+    Address:
+      type: object
+      properties:
+        street:
+          type: string
+          description: Logradouro
+          example: "Rua Exemplo, 100"
+        city:
+          type: string
+          description: Cidade
+          example: "São Paulo"
+        state:
+          type: string
+          description: Estado
+          example: "SP"
+        zipCode:
+          type: string
+          description: CEP
+          example: "00000-000"
+
+    PixQRCodeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indica se a operação foi bem-sucedida
+          example: true
+        message:
+          type: string
+          description: Mensagem de retorno
+          example: "Transação criada com sucesso"
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: ID único da transação
+              example: "trx_1a2b3c4d5e6f7g8h9i0j"
+            pix:
+              type: object
+              properties:
+                emv:
+                  type: string
+                  description: Código EMV (copia e cola)
+                  example: "00020126...SEU_CODIGO_EMV_AQUI...6304ABCD"
+                qrCode:
+                  type: string
+                  description: Imagem do QR Code em Base64
+                  example: "[BASE64_ENCODED_QRCODE_IMAGE]"
+            status:
+              type: string
+              enum: [pending, paid, canceled, refunded]
+              description: Status da transação
+              example: "pending"
+            fees:
+              type: integer
+              description: Taxa cobrada em centavos
+              example: 0
+
+    PixTransferResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indica se a operação foi bem-sucedida
+          example: true
+        message:
+          type: string
+          description: Mensagem de retorno
+          example: "Transferência criada com sucesso"
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+              description: ID único da transferência
+              example: "transfer_abc123def456"
+            status:
+              type: string
+              enum: [queued, processing, completed, canceled]
+              description: Status da transferência
+              example: "queued"
+            amount:
+              type: integer
+              description: Valor total da transferência em centavos
+              example: 10000
+            netAmount:
+              type: integer
+              description: Valor líquido após dedução de taxas em centavos
+              example: 10000
+            fees:
+              type: integer
+              description: Taxa cobrada em centavos
+              example: 0
+            pixKey:
+              type: string
+              description: Chave PIX de destino
+              example: "fornecedor@exemplo.com"
+
+    Webhook:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID único do webhook
+          example: "webhook_abc123xyz"
+        url:
+          type: string
+          format: uri
+          description: URL do webhook
+          example: "https://exemplo.com.br/webhook"
+        events:
+          type: array
+          description: Eventos configurados
+          items:
+            type: string
+          example: ["transaction_paid", "transfer_completed"]
+        active:
+          type: boolean
+          description: Se o webhook está ativo
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Data de criação
+          example: "2024-12-31T12:00:00Z"
+
+    CompanyResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Indica se a operação foi bem-sucedida
+          example: true
+        data:
+          type: object
+          properties:
+            company:
+              $ref: '#/components/schemas/Company'
+            sellers:
+              type: array
+              description: Lista de vendedores associados à empresa
+              items:
+                $ref: '#/components/schemas/Seller'
+
+    Company:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID único da empresa
+          example: "comp_abc123def456ghi789"
+        name:
+          type: string
+          description: Razão social da empresa
+          example: "Empresa Exemplo Ltda"
+        document:
+          type: string
+          description: CNPJ da empresa (apenas números)
+          example: "12345678000199"
+        fantasyName:
+          type: string
+          nullable: true
+          description: Nome fantasia da empresa
+          example: "Exemplo Corp"
+        status:
+          type: string
+          enum: [active, inactive, pending]
+          description: Status da empresa
+          example: "active"
+
+    Seller:
+      type: object
+      properties:
+        id:
+          type: string
+          description: ID único do vendedor
+          example: "seller_xyz789uvw012"
+        name:
+          type: string
+          description: Nome completo do vendedor
+          example: "João Silva"
+        email:
+          type: string
+          format: email
+          description: Email do vendedor
+          example: "joao.silva@exemplo.com"
+        document:
+          type: string
+          description: CPF do vendedor (apenas números)
+          example: "12345678901"
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Código do erro
+          example: "INVALID_REQUEST"
+        message:
+          type: string
+          description: Mensagem de erro
+          example: "O campo 'amount' é obrigatório"
+        details:
+          type: object
+          description: Detalhes adicionais do erro
+          additionalProperties: true
+
+  responses:
+    BadRequest:
+      description: Requisição inválida
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Não autorizado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "UNAUTHORIZED"
+            message: "Token de autenticação inválido ou expirado"
+
+    RateLimited:
+      description: Limite de taxa excedido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example:
+            error: "RATE_LIMITED"
+            message: "Muitas requisições. Tente novamente em alguns minutos."
+
+tags:
+  - name: Autenticação
+    description: Endpoints para autenticação e geração de tokens
+  - name: Empresa
+    description: Endpoints para consulta de dados da empresa
+  - name: PIX IN
+    description: Endpoints para recebimento de pagamentos PIX
+  - name: PIX OUT
+    description: Endpoints para envio de transferências PIX
+  - name: Webhooks
+    description: Endpoints para gerenciamento de webhooks 
