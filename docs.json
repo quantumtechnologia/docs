@@ -4,7 +4,8 @@
   "name": "Quantum Pay",
   "colors": {
     "primary": "#FD5D20",
-    "dark": "#FFFFFF"
+    "light": "#FD5D20",
+    "dark": "#FD5D20"
   },
   "favicon": "/favicon.svg",
   "api": {
