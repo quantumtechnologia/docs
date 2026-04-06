@@ -5,7 +5,7 @@ info:
   version: 1.0.0
   contact:
     name: Quantum Pay
-    email: contato@quantumpay.com.br
+    email: quantumtechnologia@gmail.com
     url: https://quantumpay.com.br
 servers:
   - url: https://api.quantumpay.com.br
@@ -51,14 +51,22 @@ paths:
               schema:
                 type: object
                 properties:
+                  success:
+                    type: boolean
+                    description: Indica se a operação foi bem-sucedida
+                    example: true
                   token:
                     type: string
                     description: Token JWT válido por 30 minutos
                     example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                  expires_in:
+                  tokenType:
+                    type: string
+                    description: Tipo do token
+                    example: "Bearer"
+                  expiresIn:
                     type: integer
-                    description: Tempo de expiração em segundos
-                    example: 1800
+                    description: Tempo de expiração em milissegundos
+                    example: 1800000
         '401':
           $ref: '#/components/responses/Unauthorized'
         '429':
@@ -104,8 +112,13 @@ paths:
                   description: Lista de itens do pedido
                   items:
                     $ref: '#/components/schemas/Item'
-                billingAddress:
-                  $ref: '#/components/schemas/Address'
+                metadata:
+                  type: object
+                  description: Metadados adicionais (UTMs, dados do checkout, etc.)
+                  additionalProperties: true
+                  example:
+                    utm_source: "google"
+                    checkout: "shopify"
       responses:
         '201':
           description: QR Code criado com sucesso
@@ -357,6 +370,7 @@ components:
       required:
         - name
         - email
+        - documentType
         - document
         - phone
       properties:
@@ -372,57 +386,78 @@ components:
         documentType:
           type: string
           enum: [cpf, cnpj]
-          description: Tipo de documento do cliente
-          example: "cpf" 
+          description: Tipo de documento do cliente (obrigatório)
+          example: "cpf"
         document:
           type: string
-          description: CPF ou CNPJ do cliente
+          description: CPF ou CNPJ do cliente (apenas números)
           example: "11122233344"
         phone:
           type: string
-          description: Telefone do cliente
-          example: "(11) 91234-5678"
+          description: Telefone do cliente com DDD
+          example: "11912345678"
+        billingAddress:
+          $ref: '#/components/schemas/Address'
 
     Item:
       type: object
       required:
-        - name
+        - title
         - quantity
-        - price
+        - amountInCents
       properties:
-        name:
+        title:
           type: string
           description: Nome do item
           example: "Produto A"
+        tangible:
+          type: boolean
+          description: Se o item é tangível (produto físico)
+          example: false
         quantity:
           type: integer
           minimum: 1
           description: Quantidade
           example: 2
-        price:
+        amountInCents:
           type: integer
-          description: Preço unitário em centavos
-          example: 2500
+          description: Valor total do item em centavos (quantidade x preço unitário)
+          example: 5000
 
     Address:
       type: object
+      required:
+        - street
+        - number
+        - neighborhood
+        - city
+        - state
+        - zipCode
       properties:
         street:
           type: string
           description: Logradouro
-          example: "Rua Exemplo, 100"
+          example: "Rua Exemplo"
+        number:
+          type: string
+          description: Número
+          example: "100"
+        neighborhood:
+          type: string
+          description: Bairro
+          example: "Centro"
         city:
           type: string
           description: Cidade
           example: "São Paulo"
         state:
           type: string
-          description: Estado
+          description: Estado (sigla)
           example: "SP"
         zipCode:
           type: string
           description: CEP
-          example: "00000-000"
+          example: "01001000"
 
     PixQRCodeResponse:
       type: object

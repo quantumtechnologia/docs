@@ -48,6 +48,7 @@ Authorization: Bearer <seu_token_bearer>
     - `email` (string): Email válido
     - `documentType` (string): "cpf" ou "cnpj"
     - `document` (string): Número do documento (apenas números)
+    - `phone` (string): Telefone com DDD
     
     ```json
     {
@@ -55,7 +56,8 @@ Authorization: Bearer <seu_token_bearer>
         "name": "Cliente Exemplo Silva",
         "email": "cliente@exemplo.com",
         "documentType": "cpf",
-        "document": "11122233344"
+        "document": "11122233344",
+        "phone": "11912345678"
       }
     }
     ```
@@ -86,20 +88,6 @@ Authorization: Bearer <seu_token_bearer>
     ```json
     {
       "postbackUrl": "https://exemplo.com.br/webhook/pix-in"
-    }
-    ```
-  </Accordion>
-  
-  <Accordion title="customer.phone" icon="phone">
-    **Tipo**: `string`  
-    **Descrição**: Telefone do cliente  
-    **Formato**: Formato com DDD e número
-    
-    ```json
-    {
-      "customer": {
-        "phone": "(11) 91234-5678"
-      }
     }
     ```
   </Accordion>
@@ -180,7 +168,15 @@ curl --location 'https://api.quantumpay.com.br/api/v1/pix/in/qrcode' \
       "email": "cliente@exemplo.com",
       "document": "11122233344",
       "documentType": "cpf",
-      "phone": "(11) 91234-5678"
+      "phone": "11912345678",
+      "billingAddress": {
+        "street": "Rua Exemplo",
+        "number": "100",
+        "neighborhood": "Centro",
+        "city": "São Paulo",
+        "state": "SP",
+        "zipCode": "01001000"
+      }
     },
     "items": [
       {
@@ -195,13 +191,7 @@ curl --location 'https://api.quantumpay.com.br/api/v1/pix/in/qrcode' \
         "quantity": 1,
         "amountInCents": 5000
       }
-    ],
-    "billingAddress": {
-      "street": "Rua Exemplo, 100",
-      "city": "São Paulo",
-      "state": "SP",
-      "zipCode": "00000-000"
-    }
+    ]
   }'
 ```
 
