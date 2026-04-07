@@ -97,16 +97,16 @@ Os webhooks são enviados automaticamente via **POST** para as URLs que você co
   **IMPORTANTE**: Sempre verifique a assinatura dos webhooks para garantir autenticidade e segurança.
 </Warning>
 
-Toda notificação que enviamos para o seu endpoint é assinada. Fazemos isso incluindo um header com o nome `Quantumpay-Signature` em cada evento que enviamos. Isso permite verificar e garantir que o evento foi enviado pelo Quantum Pay e não por um terceiro.
+Toda notificação que enviamos para o seu endpoint é assinada. Fazemos isso incluindo um header com o nome `Quantum-Pay-Signature` em cada evento que enviamos. Isso permite verificar e garantir que o evento foi enviado pelo Quantum Pay e não por um terceiro.
 
-### Formato do Header Quantumpay-Signature
+### Formato do Header Quantum-Pay-Signature
 
-O header `Quantumpay-Signature` contém um **timestamp** e uma ou mais **assinaturas**. O timestamp é prefixado por `t=` e cada assinatura é prefixada por um schema. Schemas começam com `v` seguido de um integer. Atualmente existe apenas um schema de assinatura que é o `v1`.
+O header `Quantum-Pay-Signature` contém um **timestamp** e uma ou mais **assinaturas**. O timestamp é prefixado por `t=` e cada assinatura é prefixada por um schema. Schemas começam com `v` seguido de um integer. Atualmente existe apenas um schema de assinatura que é o `v1`.
 
-**Exemplo do Header Quantumpay-Signature:**
+**Exemplo do Header Quantum-Pay-Signature:**
 
 ```http
-Quantumpay-Signature: t=1580306324381,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
+Quantum-Pay-Signature: t=1580306324381,v1=5257a869e7ecebeda32affa62cdca3fa51cad7e77a0e56ff536d0ce8e108d8bd
 ```
 
 As assinaturas são geradas usando **HMAC** com **SHA-256**. Para prevenir ataques de reversão de versão (downgrade attacks), você deve ignorar todos os schemas que não são `v1`.
@@ -139,10 +139,10 @@ const crypto = require('crypto')
 
 function verifyWebhookSignature(requestHeaders, requestPayload, secretKey) {
   // Passo 1: Extrair timestamp e assinatura do header
-  const signatureHeader = requestHeaders['quantumpay-signature']
-  
+  const signatureHeader = requestHeaders['quantum-pay-signature']
+
   if (!signatureHeader) {
-    throw new Error('Header Quantumpay-Signature não encontrado')
+    throw new Error('Header Quantum-Pay-Signature não encontrado')
   }
   
   const elements = signatureHeader.split(',')
@@ -224,10 +224,10 @@ def verify_webhook_signature(request_headers, request_payload, secret_key):
     Verifica a assinatura do webhook Quantum Pay
     """
     # Passo 1: Extrair timestamp e assinatura do header
-    signature_header = request_headers.get('quantumpay-signature')
-    
+    signature_header = request_headers.get('quantum-pay-signature')
+
     if not signature_header:
-        raise ValueError('Header Quantumpay-Signature não encontrado')
+        raise ValueError('Header Quantum-Pay-Signature não encontrado')
     
     elements = signature_header.split(',')
     timestamp = None
@@ -306,10 +306,10 @@ print(f'Assinatura gerada: {signature}')
 
 function verifyWebhookSignature($requestHeaders, $requestPayload, $secretKey) {
     // Passo 1: Extrair timestamp e assinatura do header
-    $signatureHeader = $requestHeaders['quantumpay-signature'] ?? $requestHeaders['Quantumpay-Signature'] ?? null;
-    
+    $signatureHeader = $requestHeaders['quantum-pay-signature'] ?? $requestHeaders['Quantum-Pay-Signature'] ?? null;
+
     if (!$signatureHeader) {
-        throw new Exception('Header Quantumpay-Signature não encontrado');
+        throw new Exception('Header Quantum-Pay-Signature não encontrado');
     }
     
     $elements = explode(',', $signatureHeader);
@@ -388,15 +388,15 @@ echo "Assinatura gerada: " . $signature . "\n";
 ```javascript
 // Exemplo do Header da requisição enviada pelo Quantum Pay:
 const requestHeaders = {
-  'Quantumpay-Signature': 't=1580306991086,v1=348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8'
+  'Quantum-Pay-Signature': 't=1580306991086,v1=348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8'
 }
 
-// Extrair o valor de 't' do Header 'Quantumpay-Signature'
-const reqTimestamp = requestHeaders['Quantumpay-Signature'].split(',')[0].split('=')[1]
+// Extrair o valor de 't' do Header 'Quantum-Pay-Signature'
+const reqTimestamp = requestHeaders['Quantum-Pay-Signature'].split(',')[0].split('=')[1]
 // '1580306991086'
 
-// Extrair o valor de 'v1' do Header 'Quantumpay-Signature'
-const reqSignature = requestHeaders['Quantumpay-Signature'].split(',')[1].split('=')[1]
+// Extrair o valor de 'v1' do Header 'Quantum-Pay-Signature'
+const reqSignature = requestHeaders['Quantum-Pay-Signature'].split(',')[1].split('=')[1]
 // '348a92ec7864e30fc9cf3ea91b2e6e1392a14c8379103cb1d8e48e39334a4fd8'
 
 // A assinatura que você gerou no Passo 2 deve ser igual ao valor da variável "reqSignature"
@@ -658,7 +658,7 @@ curl -v \
 app.post('/webhooks/quantumpay', express.raw({type: 'application/json'}), (req, res) => {
   try {
     // 1. Verificar assinatura
-    const signature = req.headers['quantumpay-signature']
+    const signature = req.headers['quantum-pay-signature']
     if (!verifyWebhookSignature(req.body, signature, WEBHOOK_SECRET)) {
       return res.status(401).send('Unauthorized')
     }

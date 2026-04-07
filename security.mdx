@@ -117,7 +117,7 @@ function verifyWebhookSignature(payload, signature, secret) {
 
 // Uso no seu endpoint
 app.post('/webhooks/quantumpay', (req, res) => {
-  const signature = req.headers['quantumpay-signature']
+  const signature = req.headers['quantum-pay-signature']
   const secret = process.env.WEBHOOK_SECRET
   
   if (!verifyWebhookSignature(req.body, signature, secret)) {
