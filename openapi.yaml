@@ -302,7 +302,7 @@ paths:
                       - transaction_created
                       - transaction_paid
                       - transaction_refunded
-                      - transaction_infraction
+                      - infraction
                       - transfer_created
                       - transfer_updated
                       - transfer_completed
