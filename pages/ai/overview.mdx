@@ -11,7 +11,7 @@ O MCP permite que ferramentas de IA acessem a documentação completa em tempo r
 
 ```bash
 # Claude
-claude mcp add quantumpay --scope user --transport http https://api.quantumpay.com.br/mcp
+claude mcp add quantumpay --scope user --transport http https://quantum-pay-mcp.quantumpay.workers.dev/mcp
 ```
 
 ```json
@@ -21,7 +21,7 @@ claude mcp add quantumpay --scope user --transport http https://api.quantumpay.c
     "servers": {
       "quantumpay": {
         "type": "http",
-        "url": "https://api.quantumpay.com.br/mcp"
+        "url": "https://quantum-pay-mcp.quantumpay.workers.dev/mcp"
       }
     }
   }
@@ -30,7 +30,7 @@ claude mcp add quantumpay --scope user --transport http https://api.quantumpay.c
 
 ```bash
 # OpenAI Codex
-codex mcp add --name quantumpay --url https://api.quantumpay.com.br/mcp
+codex mcp add --name quantumpay --url https://quantum-pay-mcp.quantumpay.workers.dev/mcp
 ```
 
 Após conectar, sua IA terá acesso a:
@@ -43,7 +43,7 @@ Após conectar, sua IA terá acesso a:
 ## Formatos disponíveis
 
 <CardGroup cols={2}>
-  <Card title="Servidor MCP" icon="server" href="https://api.quantumpay.com.br/mcp">
+  <Card title="Servidor MCP" icon="server" href="https://quantum-pay-mcp.quantumpay.workers.dev/mcp">
     Endpoint MCP nativo. Compatible com Claude, VS Code Copilot, Codex e qualquer cliente MCP.
   </Card>
   <Card title="llms.txt — resumido" icon="file-text" href="https://docs.quantumpay.com.br/llms.txt">
