@@ -3,16 +3,51 @@ title: 'Usar com IA e ferramentas de código'
 description: 'Integre a documentação da Quantum Pay com ChatGPT, Claude, GitHub Copilot, Cursor e outros assistentes de IA'
 ---
 
-A Quantum Pay disponibiliza sua documentação em formato otimizado para inteligências artificiais, seguindo o padrão [llms.txt](https://llmstxt.org). Isso permite que você conecte qualquer assistente de IA às nossas docs e receba ajuda precisa na integração.
+A Quantum Pay disponibiliza sua documentação em formato otimizado para inteligências artificiais, seguindo o padrão [llms.txt](https://llmstxt.org) e com servidor **MCP** (Model Context Protocol) nativo. Isso permite que você conecte qualquer assistente de IA às nossas docs e receba ajuda precisa na integração.
+
+## Conectar via MCP
+
+O MCP permite que ferramentas de IA acessem a documentação completa em tempo real, com recursos estruturados e prompts pré-definidos para as integrações mais comuns.
+
+```bash
+# Claude
+claude mcp add quantumpay --scope user --transport http https://api.quantumpay.com.br/mcp
+```
+
+```json
+// VS Code (settings.json)
+{
+  "mcp": {
+    "servers": {
+      "quantumpay": {
+        "type": "http",
+        "url": "https://api.quantumpay.com.br/mcp"
+      }
+    }
+  }
+}
+```
+
+```bash
+# OpenAI Codex
+codex mcp add --name quantumpay --url https://api.quantumpay.com.br/mcp
+```
+
+Após conectar, sua IA terá acesso a:
+- Documentação completa de todos os endpoints
+- Guias separados por seção (autenticação, PIX IN, PIX OUT, webhooks)
+- Prompts pré-definidos para integrações comuns
+
+---
 
 ## Formatos disponíveis
 
 <CardGroup cols={2}>
-  <Card title="llms.txt — resumido" icon="file-text" href="https://docs.quantumpay.com.br/llms.txt">
-    Versão concisa da API com todos os endpoints essenciais. Ideal para contexto inicial e prompts rápidos. Inclui exemplos completos de PIX IN, PIX OUT e webhooks.
+  <Card title="Servidor MCP" icon="server" href="https://api.quantumpay.com.br/mcp">
+    Endpoint MCP nativo. Compatible com Claude, VS Code Copilot, Codex e qualquer cliente MCP.
   </Card>
-  <Card title="llms-full.txt — completo" icon="database" href="https://docs.quantumpay.com.br/llms-full.txt">
-    Versão completa de toda a documentação em texto puro. Ideal para análise profunda e geração de SDKs.
+  <Card title="llms.txt — resumido" icon="file-text" href="https://docs.quantumpay.com.br/llms.txt">
+    Versão concisa da API com todos os endpoints essenciais. Ideal para contexto inicial e prompts rápidos.
   </Card>
   <Card title="OpenAPI (YAML)" icon="code" href="https://docs.quantumpay.com.br/openapi.yaml">
     Especificação OpenAPI 3.1 completa. Compatível com Postman, Insomnia e geração automática de clientes.
