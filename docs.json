@@ -16,11 +16,6 @@
       }
     }
   },
-  "integrations": {
-    "llms": {
-      "enabled": true
-    }
-  },
   "navigation": {
     "tabs": [
       {
