@@ -464,7 +464,7 @@ const eventProcessor = new WebhookEventProcessor()
 app.post('/webhooks/quantumpay', async (req, res) => {
   try {
     // Verificar assinatura
-    if (!verifySignature(req.body, req.headers['quantumpay-signature'], WEBHOOK_SECRET)) {
+    if (!verifySignature(req.body, req.headers['quantum-pay-signature'], WEBHOOK_SECRET)) {
       return res.status(401).send('Invalid signature')
     }
 

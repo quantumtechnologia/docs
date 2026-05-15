@@ -658,8 +658,8 @@ curl -v \
 app.post('/webhooks/quantumpay', express.raw({type: 'application/json'}), (req, res) => {
   try {
     // 1. Verificar assinatura
-    const signature = req.headers['quantum-pay-signature']
-    if (!verifyWebhookSignature(req.body, signature, WEBHOOK_SECRET)) {
+    const requestPayload = req.body.toString()
+    if (!verifyWebhookSignature(req.headers, requestPayload, WEBHOOK_SECRET)) {
       return res.status(401).send('Unauthorized')
     }
 

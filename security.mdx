@@ -106,24 +106,39 @@ Protegemos contra ataques de força bruta e DDoS:
 ```javascript
 const crypto = require('crypto')
 
-function verifyWebhookSignature(payload, signature, secret) {
+function verifyWebhookSignature(payload, signatureHeader, secret) {
+  // Formato esperado: t=<timestamp>,v1=<hmac_sha256>
+  if (!signatureHeader || !signatureHeader.includes('v1=')) {
+    return false
+  }
+
+  const parts = signatureHeader.split(',')
+  const timestamp = parts[0].split('=')[1]
+  const receivedSignature = parts[1].split('=')[1]
+
+  // Recalcula o HMAC com timestamp + payload (mesmo formato do backend)
   const computedSignature = crypto
     .createHmac('sha256', secret)
-    .update(JSON.stringify(payload))
+    .update(`${timestamp}.${JSON.stringify(payload)}`)
     .digest('hex')
 
-  return signature === computedSignature
+  // Comparação segura contra timing attacks
+  if (computedSignature.length !== receivedSignature.length) return false
+  return crypto.timingSafeEqual(
+    Buffer.from(computedSignature),
+    Buffer.from(receivedSignature)
+  )
 }
 
 // Uso no seu endpoint
 app.post('/webhooks/quantumpay', (req, res) => {
-  const signature = req.headers['quantum-pay-signature']
+  const signatureHeader = req.headers['quantum-pay-signature']
   const secret = process.env.WEBHOOK_SECRET
-  
-  if (!verifyWebhookSignature(req.body, signature, secret)) {
+
+  if (!verifyWebhookSignature(req.body, signatureHeader, secret)) {
     return res.status(401).send('Unauthorized')
   }
-  
+
   // Processar webhook seguramente
   res.status(200).send('OK')
 })

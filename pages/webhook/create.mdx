@@ -606,35 +606,46 @@ app.use('/webhooks/quantumpay', express.raw({type: 'application/json'}))
 app.post('/webhooks/quantumpay', (req, res) => {
   try {
     // 1. Verificar assinatura
-    const signature = req.headers['quantumpay-signature']
+    const signatureHeader = req.headers['quantum-pay-signature']
     const payload = req.body
-    
-    if (!verifySignature(payload, signature, process.env.WEBHOOK_SECRET)) {
+
+    if (!verifySignature(payload, signatureHeader, process.env.WEBHOOK_SECRET)) {
       return res.status(401).send('Invalid signature')
     }
 
     // 2. Parse do evento
     const event = JSON.parse(payload)
-    
+
     // 3. Processar evento
     processWebhookEvent(event)
-    
+
     // 4. Responder rapidamente
     res.status(200).send('OK')
-    
+
   } catch (error) {
     console.error('Webhook error:', error)
     res.status(500).send('Internal server error')
   }
 })
 
-function verifySignature(payload, signature, secret) {
+function verifySignature(payload, signatureHeader, secret) {
+  // Formato esperado: t=<timestamp>,v1=<hmac_sha256>
+  if (!signatureHeader || !signatureHeader.includes('v1=')) return false
+
+  const parts = signatureHeader.split(',')
+  const timestamp = parts[0].split('=')[1]
+  const receivedSignature = parts[1].split('=')[1]
+
   const computedSignature = crypto
     .createHmac('sha256', secret)
-    .update(payload)
+    .update(`${timestamp}.${JSON.stringify(payload)}`)
     .digest('hex')
-  
-  return signature === computedSignature
+
+  if (computedSignature.length !== receivedSignature.length) return false
+  return crypto.timingSafeEqual(
+    Buffer.from(computedSignature),
+    Buffer.from(receivedSignature)
+  )
 }
 
 function processWebhookEvent(event) {
