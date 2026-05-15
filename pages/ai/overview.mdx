@@ -1,0 +1,281 @@
+---
+title: 'Usar com IA e ferramentas de código'
+description: 'Integre a documentação da Quantum Pay com ChatGPT, Claude, GitHub Copilot, Cursor e outros assistentes de IA'
+---
+
+A Quantum Pay disponibiliza sua documentação em formato otimizado para inteligências artificiais, seguindo o padrão [llms.txt](https://llmstxt.org). Isso permite que você conecte qualquer assistente de IA às nossas docs e receba ajuda precisa na integração.
+
+---
+
+## Como conectar sua IA favorita
+
+<Tabs>
+  <Tab title="Claude Code">
+    **Conectar via MCP (recomendado)**
+
+    O Claude Code suporta MCP (Model Context Protocol), que permite ao Claude acessar nossa documentação em tempo real durante o desenvolvimento.
+
+    ```bash
+    # Adicionar Quantum Pay como servidor MCP
+    claude mcp add --transport http https://docs.quantumpay.com.br/llms-full.txt
+    ```
+
+    Ou cole o arquivo de documentação diretamente no contexto:
+
+    ```bash
+    # Baixar a documentação completa para usar localmente
+    curl -o quantum-pay-docs.txt https://docs.quantumpay.com.br/llms-full.txt
+    ```
+
+    Depois, no terminal:
+    ```bash
+    # Iniciar Claude Code com contexto das docs
+    claude "Leia o arquivo quantum-pay-docs.txt e me ajude a integrar o PIX IN"
+    ```
+  </Tab>
+
+  <Tab title="Claude (chat)">
+    **Opção 1 — Abrir direto no Claude**
+
+    Clique no link abaixo para abrir uma conversa com o contexto das docs carregado:
+
+    <a href="https://claude.ai/new?q=Leia+a+documentação+da+API+em+https://docs.quantumpay.com.br/llms.txt+e+me+ajude+a+integrar+o+PIX+IN+da+Quantum+Pay" target="_blank">
+      <button>Abrir no Claude →</button>
+    </a>
+
+    **Opção 2 — Cole o prompt manualmente**
+
+    ```
+    Leia a documentação da API da Quantum Pay em:
+    https://docs.quantumpay.com.br/llms.txt
+
+    Me ajude a integrar o PIX IN (recebimento via QR Code PIX)
+    em um projeto Node.js.
+    ```
+  </Tab>
+
+  <Tab title="ChatGPT">
+    **Abrir no ChatGPT com contexto das docs:**
+
+    <a href="https://chatgpt.com/?q=Use+a+documentação+em+https://docs.quantumpay.com.br/llms.txt+para+me+ajudar+a+integrar+o+PIX+IN+da+Quantum+Pay" target="_blank">
+      <button>Abrir no ChatGPT →</button>
+    </a>
+
+    **Ou use o Custom GPT com o arquivo llms.txt:**
+
+    1. Acesse [chatgpt.com](https://chatgpt.com)
+    2. Crie um novo chat
+    3. Cole este prompt:
+
+    ```
+    Use a documentação da API Quantum Pay disponível em:
+    https://docs.quantumpay.com.br/llms.txt
+
+    Preciso integrar pagamentos PIX no meu sistema. Me guie passo a passo.
+    ```
+  </Tab>
+
+  <Tab title="GitHub Copilot / VS Code">
+    **Configurar Copilot com as docs da Quantum Pay**
+
+    Crie o arquivo `.github/copilot-instructions.md` na raiz do seu projeto:
+
+    ```markdown
+    # Instruções para integração Quantum Pay
+
+    Este projeto usa a API Quantum Pay para processamento de pagamentos PIX.
+
+    Documentação da API: https://docs.quantumpay.com.br/llms.txt
+
+    ## Pontos importantes:
+    - URL base: https://api.quantumpay.com.br
+    - Autenticação: Basic Auth (API Key + Secret) → Bearer Token JWT (30 min)
+    - Valores monetários: SEMPRE em centavos (R$ 10,00 = 1000)
+    - PIX IN: POST /api/v1/pix/in/qrcode
+    - PIX OUT: POST /api/v1/pix/out/pixkey com Idempotency-Key
+    - Webhooks: validar assinatura X-Signature com HMAC-SHA256
+    ```
+
+    **No VS Code com Copilot Chat:**
+
+    ```
+    @workspace /docs Leia https://docs.quantumpay.com.br/llms.txt
+    e me ajude a criar uma função para processar pagamentos PIX
+    ```
+  </Tab>
+
+  <Tab title="Cursor">
+    **Adicionar docs como contexto no Cursor**
+
+    1. Abra o Cursor
+    2. Use `Ctrl+K` (ou `Cmd+K` no Mac) para abrir o chat
+    3. Cole o link da documentação:
+
+    ```
+    @docs https://docs.quantumpay.com.br/llms.txt
+
+    Me ajude a integrar PIX IN e PIX OUT da Quantum Pay
+    ```
+
+    **Ou configure nas Cursor Rules (`.cursorrules`):**
+
+    ```
+    # Quantum Pay API Integration
+
+    Documentação completa: https://docs.quantumpay.com.br/llms.txt
+
+    Regras para trabalhar com a Quantum Pay API:
+    - Todos os valores são em centavos
+    - Sempre renovar o Bearer Token antes de expirar (30 min)
+    - Usar Idempotency-Key em transferências PIX OUT
+    - Validar assinatura HMAC-SHA256 em todos os webhooks recebidos
+    - Retornar HTTP 200 imediatamente no endpoint de webhook
+    ```
+  </Tab>
+
+  <Tab title="Gemini / Google AI">
+    **Usar com Gemini (Google AI Studio ou Gemini Chat):**
+
+    ```
+    Leia a documentação da API Quantum Pay em:
+    https://docs.quantumpay.com.br/llms.txt
+
+    Preciso de ajuda para:
+    1. Autenticar com Basic Auth e obter Bearer Token
+    2. Criar uma cobrança PIX (QR Code)
+    3. Configurar webhook para confirmar pagamento
+    ```
+
+    **Gemini Code Assist (Google Cloud):**
+
+    Adicione ao contexto do projeto:
+    ```
+    API Reference: https://docs.quantumpay.com.br/llms.txt
+    OpenAPI Spec: https://docs.quantumpay.com.br/openapi.yaml
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Formato da documentação para IA
+
+Disponibilizamos dois formatos:
+
+<CardGroup cols={2}>
+  <Card title="llms.txt — resumido" icon="file-text" href="https://docs.quantumpay.com.br/llms.txt">
+    Versão concisa da API com todos os endpoints essenciais. Ideal para contexto inicial e prompts rápidos. Inclui exemplos completos de PIX IN, PIX OUT e webhooks.
+  </Card>
+  <Card title="llms-full.txt — completo" icon="database" href="https://docs.quantumpay.com.br/llms-full.txt">
+    Versão completa de toda a documentação em texto puro. Ideal para análise profunda, geração de SDKs e integrações via MCP.
+  </Card>
+  <Card title="OpenAPI (JSON/YAML)" icon="code" href="https://docs.quantumpay.com.br/openapi.yaml">
+    Especificação OpenAPI 3.1 completa. Compatível com Postman, Insomnia, e geração automática de clientes em qualquer linguagem.
+  </Card>
+  <Card title="Referência da API" icon="book" href="https://docs.quantumpay.com.br/pages/reference/errors">
+    Todos os códigos de erro, status e rate limits documentados em detalhe.
+  </Card>
+</CardGroup>
+
+---
+
+## Prompts prontos para uso
+
+Copie e cole estes prompts com o contexto das docs já carregado:
+
+<AccordionGroup>
+  <Accordion title="Integração PIX IN básica" icon="qrcode">
+    ```
+    Usando a documentação em https://docs.quantumpay.com.br/llms.txt,
+    crie uma classe em [NODE.JS/PYTHON/PHP] que:
+    1. Autentica com a Quantum Pay usando API Key e API Secret
+    2. Cria uma cobrança PIX com QR Code
+    3. Exibe o QR Code e o código "copia e cola" para o cliente
+    4. Trata erros de autenticação e rate limit
+    ```
+  </Accordion>
+
+  <Accordion title="Webhook completo com validação" icon="webhook">
+    ```
+    Usando a documentação em https://docs.quantumpay.com.br/llms.txt,
+    crie um endpoint de webhook em [EXPRESS/FASTAPI/LARAVEL] que:
+    1. Valida a assinatura HMAC-SHA256 no header X-Signature
+    2. Processa o evento transaction_paid para liberar o produto
+    3. Processa o evento transfer_completed para confirmar saque
+    4. Retorna HTTP 200 imediatamente em todos os casos
+    5. Loga eventos inválidos sem quebrar
+    ```
+  </Accordion>
+
+  <Accordion title="PIX OUT com idempotência" icon="bolt">
+    ```
+    Usando a documentação em https://docs.quantumpay.com.br/llms.txt,
+    crie uma função para enviar transferência PIX OUT que:
+    1. Gera um Idempotency-Key único por transferência (UUID v4)
+    2. Envia para qualquer tipo de chave PIX (CPF, CNPJ, email, telefone, EVP)
+    3. Verifica o status da transferência via polling ou webhook
+    4. Trata o caso de transferência já enviada (idempotência)
+    ```
+  </Accordion>
+
+  <Accordion title="SDK completo" icon="package">
+    ```
+    Usando a documentação OpenAPI em https://docs.quantumpay.com.br/openapi.yaml,
+    gere um SDK em [TYPESCRIPT/PYTHON/PHP] para a Quantum Pay que:
+    1. Tipagem completa de todos os requests e responses
+    2. Gerenciamento automático de token (renovação antes de expirar)
+    3. Retry automático com exponential backoff para erros 429 e 5xx
+    4. Suporte a todos os endpoints: auth, pix-in, pix-out, webhooks
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Dúvidas frequentes das IAs
+
+Estas são as questões que mais surgem ao integrar com assistentes de IA:
+
+<AccordionGroup>
+  <Accordion title="Como a autenticação funciona?" icon="key">
+    A autenticação é em **dois passos**:
+
+    1. `POST /api/auth` com `Authorization: Basic base64(apiKey:apiSecret)` → retorna Bearer Token (JWT, 30 min)
+    2. Todas as outras requisições usam `Authorization: Bearer <token>`
+
+    O token expira em 30 minutos. Renove automaticamente antes de expirar.
+  </Accordion>
+
+  <Accordion title="Os valores são em reais ou centavos?" icon="dollar-sign">
+    **Sempre em centavos (inteiros).** Nunca use ponto decimal.
+
+    - R$ 1,00 = `100`
+    - R$ 10,50 = `1050`
+    - R$ 250,00 = `25000`
+
+    O campo se chama `amountInCents` em todos os endpoints.
+  </Accordion>
+
+  <Accordion title="Como sei que o pagamento foi confirmado?" icon="check">
+    Via **webhook** do evento `transaction_paid`. Configure um endpoint público e registre via `POST /api/v1/webhook`. Nunca confie apenas no status retornado na criação — ele sempre começa como `pending`.
+  </Accordion>
+
+  <Accordion title="Como evitar PIX OUT duplicado?" icon="copy">
+    Use o header `Idempotency-Key` com um UUID único por operação. Se você reenviar a mesma requisição com o mesmo `Idempotency-Key`, a API retorna o resultado da primeira chamada sem criar uma nova transferência.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Suporte
+
+Precisa de ajuda além da IA?
+
+<CardGroup cols={2}>
+  <Card title="Suporte por e-mail" icon="envelope" href="mailto:contato@quantumpay.com.br">
+    contato@quantumpay.com.br
+  </Card>
+  <Card title="Acessar dashboard" icon="layout-dashboard" href="https://app.quantumpay.com.br">
+    Gere suas credenciais e configure webhooks
+  </Card>
+</CardGroup>

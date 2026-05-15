@@ -16,6 +16,11 @@
       }
     }
   },
+  "integrations": {
+    "llms": {
+      "enabled": true
+    }
+  },
   "navigation": {
     "tabs": [
       {
@@ -63,6 +68,20 @@
               "pages/webhook/create",
               "pages/webhook/delete",
               "pages/webhook/events"
+            ]
+          },
+          {
+            "group": "Referência",
+            "pages": [
+              "pages/reference/status-codes",
+              "pages/reference/errors",
+              "pages/reference/rate-limits"
+            ]
+          },
+          {
+            "group": "Usar com IA",
+            "pages": [
+              "pages/ai/overview"
             ]
           }
         ]

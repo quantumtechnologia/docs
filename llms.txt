@@ -1,0 +1,333 @@
+# Quantum Pay API
+
+> Quantum Pay é uma API de pagamentos instantâneos brasileira. Suporta PIX IN (recebimento via QR Code), PIX OUT (transferência por chave PIX) e webhooks para notificação de eventos. Autenticação via Basic Auth (API Key + Secret) que retorna um JWT Bearer válido por 30 minutos.
+
+## Início rápido
+
+Para integrar a Quantum Pay, você precisa de três passos:
+
+1. Autenticar com suas credenciais (API Key + Secret) em `POST /api/auth` para obter um Bearer Token
+2. Criar cobranças PIX com `POST /api/v1/pix/in/qrcode` usando o Bearer Token
+3. Configurar um webhook para receber notificações de pagamento confirmado
+
+**URL base da API:** `https://api.quantumpay.com.br`
+
+**Todos os valores monetários são em centavos** (R$ 10,00 = 1000, R$ 1,50 = 150)
+
+---
+
+## Documentação
+
+- [Introdução e visão geral](https://docs.quantumpay.com.br): O que é a API, casos de uso, conceitos fundamentais
+- [Segurança](https://docs.quantumpay.com.br/security): Autenticação, criptografia, compliance, boas práticas de segurança
+- [Autenticação — como começar](https://docs.quantumpay.com.br/pages/auth/getting-started): Como obter API Key e API Secret no dashboard
+- [Autenticação — gerar token](https://docs.quantumpay.com.br/pages/auth/generate-token): Endpoint POST /api/auth, exemplos em Node.js, Python e PHP
+- [Dados da empresa](https://docs.quantumpay.com.br/pages/company/get-details): Consultar informações e saldo da empresa autenticada
+- [PIX IN — visão geral](https://docs.quantumpay.com.br/pages/pix-in/overview): Como funciona o recebimento via PIX, fluxo de pagamento
+- [PIX IN — criar QR Code](https://docs.quantumpay.com.br/pages/pix-in/create-qrcode): POST /api/v1/pix/in/qrcode, campos, exemplos completos
+- [PIX OUT — visão geral](https://docs.quantumpay.com.br/pages/pix-out/overview): Como funciona o envio de transferências PIX, fluxo
+- [PIX OUT — enviar por chave](https://docs.quantumpay.com.br/pages/pix-out/send-pixkey): POST /api/v1/pix/out/pixkey, tipos de chave PIX, exemplos
+- [Webhooks — guia completo](https://docs.quantumpay.com.br/webhook): Eventos, assinatura HMAC-SHA256, retry, monitoramento
+- [Webhooks — criar](https://docs.quantumpay.com.br/pages/webhook/create): POST para cadastrar endpoint de webhook
+- [Webhooks — listar](https://docs.quantumpay.com.br/pages/webhook/list): GET para listar webhooks configurados
+- [Webhooks — deletar](https://docs.quantumpay.com.br/pages/webhook/delete): DELETE para remover webhook
+- [Webhooks — eventos](https://docs.quantumpay.com.br/pages/webhook/events): Referência de todos os tipos de evento disponíveis
+- [Códigos de status](https://docs.quantumpay.com.br/pages/reference/status-codes): Status HTTP, status de transação, status de transferência
+- [Códigos de erro](https://docs.quantumpay.com.br/pages/reference/errors): Classificação de erros, códigos, estratégias de tratamento
+- [Rate limits](https://docs.quantumpay.com.br/pages/reference/rate-limits): Limites por endpoint, estratégias de filas e retry
+
+---
+
+## Autenticação
+
+### Obter Bearer Token
+
+```
+POST https://api.quantumpay.com.br/api/auth
+Authorization: Basic base64(apiKey:apiSecret)
+```
+
+Resposta:
+```json
+{
+  "success": true,
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "tokenType": "Bearer",
+  "expiresIn": 1800000
+}
+```
+
+O token expira em 30 minutos (1800 segundos). Renove automaticamente 1 minuto antes de expirar.
+
+---
+
+## PIX IN — Criar QR Code
+
+```
+POST https://api.quantumpay.com.br/api/v1/pix/in/qrcode
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Body obrigatório:
+```json
+{
+  "amountInCents": 5000,
+  "customer": {
+    "name": "Nome do Cliente",
+    "email": "cliente@email.com",
+    "documentType": "cpf",
+    "document": "11122233344",
+    "phone": "11912345678"
+  }
+}
+```
+
+Body completo (com campos opcionais):
+```json
+{
+  "amountInCents": 25000,
+  "description": "Pedido #123 - Loja Online",
+  "postbackUrl": "https://seusite.com/webhook/pix",
+  "customer": {
+    "name": "Cliente Exemplo Silva",
+    "email": "cliente@exemplo.com",
+    "documentType": "cpf",
+    "document": "11122233344",
+    "phone": "11912345678",
+    "billingAddress": {
+      "street": "Rua Exemplo",
+      "number": "100",
+      "neighborhood": "Centro",
+      "city": "São Paulo",
+      "state": "SP",
+      "zipCode": "01001000"
+    }
+  },
+  "items": [
+    {
+      "title": "Produto A",
+      "tangible": true,
+      "quantity": 2,
+      "amountInCents": 10000
+    }
+  ]
+}
+```
+
+Resposta de sucesso (200):
+```json
+{
+  "success": true,
+  "message": "Transação criada com sucesso",
+  "data": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "pix": {
+      "emv": "00020126...6304ABCD",
+      "qrCode": "data:image/png;base64,iVBORw0KGgo..."
+    },
+    "status": "pending",
+    "fees": 0
+  }
+}
+```
+
+- `id`: ID único da transação (use para rastrear via webhook)
+- `pix.emv`: Código PIX "copia e cola" para exibir ao usuário
+- `pix.qrCode`: Imagem Base64 do QR Code para renderizar diretamente em `<img src="...">`
+- `status`: `pending` (aguardando pagamento)
+
+---
+
+## PIX OUT — Enviar Transferência
+
+```
+POST https://api.quantumpay.com.br/api/v1/pix/out/pixkey
+Authorization: Bearer <token>
+Content-Type: application/json
+Idempotency-Key: <uuid-unico>
+```
+
+Body:
+```json
+{
+  "amountInCents": 10000,
+  "pixKey": "destinatario@email.com",
+  "pixKeyType": "EMAIL",
+  "description": "Pagamento fornecedor"
+}
+```
+
+Tipos de chave PIX (`pixKeyType`): `CPF`, `CNPJ`, `EMAIL`, `PHONE`, `EVP` (chave aleatória)
+
+Resposta de sucesso (200):
+```json
+{
+  "success": true,
+  "data": {
+    "id": "transfer_abc123",
+    "status": "queued",
+    "amountInCents": 10000,
+    "fees": 0
+  }
+}
+```
+
+Status de transferência: `queued` → `processing` → `completed` ou `canceled`/`refused`
+
+**Use o header `Idempotency-Key` com um UUID único por transferência para evitar duplicações.**
+
+---
+
+## Webhooks
+
+### Configurar Webhook
+
+```
+POST https://api.quantumpay.com.br/api/v1/webhook
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Body:
+```json
+{
+  "url": "https://seusite.com/webhook/quantum",
+  "events": [
+    "transaction_paid",
+    "transaction_refunded",
+    "transfer_completed",
+    "transfer_canceled"
+  ]
+}
+```
+
+Eventos disponíveis:
+- `transaction_created` — nova transação PIX criada
+- `transaction_paid` — **pagamento confirmado** (mais importante para PIX IN)
+- `transaction_refunded` — transação reembolsada
+- `transaction_updated` — status alterado
+- `transfer_completed` — transferência PIX OUT concluída com sucesso
+- `transfer_canceled` — transferência cancelada
+- `transfer_created` — nova transferência criada
+- `transfer_updated` — status da transferência alterado
+
+### Payload de Webhook
+
+O webhook envia um `POST` com:
+
+```json
+{
+  "event": "transaction_paid",
+  "timestamp": "2024-01-15T10:30:00.000Z",
+  "data": {
+    "id": "trx_1a2b3c4d5e6f7g8h9i0j",
+    "status": "paid",
+    "amountInCents": 5000,
+    "netAmountInCents": 4975,
+    "customer": {
+      "name": "Cliente Exemplo"
+    }
+  }
+}
+```
+
+### Validar Assinatura do Webhook
+
+Sempre valide o header `X-Signature` usando HMAC-SHA256:
+
+```javascript
+const crypto = require('crypto')
+
+function verificarWebhook(payload, signature, secret) {
+  const hash = crypto
+    .createHmac('sha256', secret)
+    .update(JSON.stringify(payload))
+    .digest('hex')
+
+  return `sha256=${hash}` === signature
+}
+```
+
+Retorne HTTP 200 para confirmar recebimento. Webhooks sem confirmação são reenviados com backoff exponencial (5 tentativas).
+
+---
+
+## Exemplo Completo — Integração PIX IN
+
+```javascript
+const axios = require('axios')
+const crypto = require('crypto')
+
+const BASE_URL = 'https://api.quantumpay.com.br'
+const API_KEY = process.env.QUANTUMPAY_API_KEY
+const API_SECRET = process.env.QUANTUMPAY_API_SECRET
+const WEBHOOK_SECRET = process.env.QUANTUMPAY_WEBHOOK_SECRET
+
+// 1. Autenticar
+async function getToken() {
+  const credentials = Buffer.from(`${API_KEY}:${API_SECRET}`).toString('base64')
+  const response = await axios.post(`${BASE_URL}/api/auth`, {}, {
+    headers: { Authorization: `Basic ${credentials}` }
+  })
+  return response.data.token
+}
+
+// 2. Criar cobrança PIX
+async function criarPix(valor, cliente) {
+  const token = await getToken()
+  const response = await axios.post(`${BASE_URL}/api/v1/pix/in/qrcode`, {
+    amountInCents: valor,
+    description: 'Pagamento via PIX',
+    postbackUrl: 'https://seusite.com/webhook/pix',
+    customer: cliente
+  }, {
+    headers: { Authorization: `Bearer ${token}` }
+  })
+  return response.data.data // { id, pix: { emv, qrCode }, status }
+}
+
+// 3. Receber webhook de confirmação
+function processarWebhook(req, res) {
+  const signature = req.headers['x-signature']
+  const payload = req.body
+
+  const hash = crypto.createHmac('sha256', WEBHOOK_SECRET)
+    .update(JSON.stringify(payload)).digest('hex')
+
+  if (`sha256=${hash}` !== signature) {
+    return res.status(401).json({ error: 'Assinatura inválida' })
+  }
+
+  if (payload.event === 'transaction_paid') {
+    const { id, amountInCents } = payload.data
+    console.log(`Pagamento confirmado: ${id} — R$ ${amountInCents / 100}`)
+    // Liberar produto/serviço aqui
+  }
+
+  res.status(200).json({ received: true })
+}
+```
+
+---
+
+## Status e Erros
+
+### Status de Transação
+- `pending` — aguardando pagamento
+- `paid` — pagamento confirmado
+- `refunded` — reembolsado
+- `expired` — expirado sem pagamento
+- `canceled` — cancelado
+
+### Erros HTTP Comuns
+- `400` — dados inválidos (CPF/CNPJ errado, campo obrigatório ausente)
+- `401` — token inválido ou expirado — gere um novo token
+- `422` — regra de negócio violada (valor fora dos limites)
+- `429` — rate limit — implemente retry com exponential backoff
+
+### Rate Limits
+- Autenticação: 5 req/min por IP
+- PIX IN (criar): 60 req/min por empresa
+- PIX OUT (enviar): 30 req/min por empresa
+- Consultas: 100 req/min por empresa
