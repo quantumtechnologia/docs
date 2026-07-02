@@ -5,7 +5,7 @@ info:
   version: 1.0.0
   contact:
     name: Quantum Pay
-    email: contato@quantumpay.com.br
+    email: contato@quantumhubpay.com
     url: https://quantumpay.com.br
 servers:
   - url: https://api.quantumpay.com.br
